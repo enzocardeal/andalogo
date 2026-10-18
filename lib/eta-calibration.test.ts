@@ -8,6 +8,7 @@ import { encodePolyline, type LatLon } from "./polyline.ts";
 const A: LatLon = [-23.55, -46.64];
 const B: LatLon = [-23.55, -46.63];
 const C: LatLon = [-23.54, -46.63];
+const D: LatLon = [-23.54, -46.64];
 const LINE = [A, B, C];
 const EAST_M = 0.01 * Math.cos((23.55 * Math.PI) / 180) * 111_320;
 const T0 = Date.parse("2026-10-19T10:00:00-03:00");
@@ -86,4 +87,16 @@ test("mergeRow adds new totals to the stored row and caps the samples", () => {
   assert.deepEqual(capped.samples, [50, 2]);
   const changed = mergeRow({ ...fresh, stops_key: "old", pace_s_per_km: [200, 150], samples: [3, 2] }, totals);
   assert.deepEqual([changed.pace_s_per_km, changed.samples], [[100, 0], [1, 0]]);
+});
+
+test("observe follows a bus on the second half of an out-and-back loop", () => {
+  const loop = [A, B, C, D, C, B, A];
+  const calibration = createCalibration([
+    { ...PATTERN, polyline: encodePolyline(loop), stop_offsets_m: stopOffsets(measure(loop), loop), circular: true },
+  ]);
+  const north = (meters: number): LatLon => [B[0] + meters / 111_320, B[1]];
+  calibration.observe(snapshot(2, [["back", north(600), 0]]));
+  assert.equal(calibration.observe(snapshot(2, [["back", north(300), 60]])), 1);
+  const [totals] = calibration.drain();
+  assert.equal(Math.round(totals.meters.reduce((sum, meters) => sum + meters, 0)), 300);
 });

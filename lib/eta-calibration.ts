@@ -1,4 +1,4 @@
-import { MAX_OFF_ROUTE_M, measure, project, TERMINAL_M, type Route } from "./eta.ts";
+import { MAX_OFF_ROUTE_M, measure, passOnSide, project, TERMINAL_M, type Route } from "./eta.ts";
 import type { DayType } from "./gtfs/build.ts";
 import type { Positions } from "./olhovivo.ts";
 import { decodePolyline } from "./polyline.ts";
@@ -111,12 +111,13 @@ export function createCalibration(patterns: CalibrationPattern[]) {
           continue;
         }
         const passes = project(route, [vehicle.py, vehicle.px], MAX_OFF_ROUTE_M);
+        const start = passOnSide(passes, pattern.circular ? line.sl : null)[0];
         const ahead = known
           ? passes.filter((pass) => pass.alongM >= known.alongM - BACKWARD_M && pass.alongM - known.alongM <= MAX_STEP_M)
           : [];
         if (!known || ahead.length === 0) {
-          if (passes.length > 0) {
-            tracks.set(id, { key, alongM: passes[0].alongM, time });
+          if (start) {
+            tracks.set(id, { key, alongM: start.alongM, time });
           } else {
             tracks.delete(id);
           }

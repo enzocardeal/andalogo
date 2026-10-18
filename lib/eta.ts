@@ -136,7 +136,15 @@ export function indexPositions(positions: Positions): PositionIndex {
 
 export type Estimate = { p: string; seconds: number; accessible: boolean; lat: number; lon: number };
 
-export function estimateLine(pattern: StopPattern, vehicles: PositionLine["vs"], now: Date): Estimate[] {
+// On a circular line, Olho Vivo side 1 runs the first half of the GTFS loop and side 2 the second half.
+export function passOnSide(passes: Projection[], side: number | null): Projection[] {
+  if (side === null || passes.length < 2) {
+    return passes;
+  }
+  return side === 1 ? passes.slice(0, 1) : passes.slice(-1);
+}
+
+export function estimateLine(pattern: StopPattern, vehicles: PositionLine["vs"], now: Date, side: number | null = null): Estimate[] {
   const route = measure(decodePolyline(pattern.polyline));
   const offsets = pattern.stop_offsets_m;
   const { paces, fallback: pace } = segmentPaces(pattern);
@@ -146,7 +154,7 @@ export function estimateLine(pattern: StopPattern, vehicles: PositionLine["vs"],
     if (!(ageS <= MAX_POSITION_AGE_S)) {
       continue;
     }
-    const passes = project(route, [vehicle.py, vehicle.px], MAX_OFF_ROUTE_M);
+    const passes = passOnSide(project(route, [vehicle.py, vehicle.px], MAX_OFF_ROUTE_M), side);
     let best: number | null = null;
     for (const index of pattern.stop_indexes) {
       const stopM = offsets[index];
@@ -171,11 +179,13 @@ export function estimateStop(patterns: StopPattern[], positions: PositionIndex, 
   return patterns.map((pattern) => {
     const sign = pattern.route_id.replace(/^sp:/, "");
     const sides = pattern.circular ? [1, 2] : [pattern.direction_id + 1];
-    const vehicles = sides.flatMap((sl) => positions.get(`${sign}|${sl}`) ?? []);
+    const estimates = sides
+      .flatMap((sl) => estimateLine(pattern, positions.get(`${sign}|${sl}`) ?? [], now, pattern.circular ? sl : null))
+      .sort((a, b) => a.seconds - b.seconds);
     return {
       routeId: pattern.route_id,
       directionId: pattern.direction_id,
-      vehicles: estimateLine(pattern, vehicles, now).map(({ p, seconds, accessible, lat, lon }) => ({
+      vehicles: estimates.map(({ p, seconds, accessible, lat, lon }) => ({
         p,
         minutes: Math.round(seconds / 60),
         accessible,

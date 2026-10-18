@@ -122,3 +122,31 @@ test("estimateStop matches positions by sign and direction and rounds to minutes
   assert.deepEqual(loop.vehicles.map((bus) => bus.p), ["1", "2"]);
   assert.deepEqual(circularDirections([pattern(1), { ...pattern(2), route_id: "sp:817C-10", circular: true }]), new Map([["sp:817C-10", 0]]));
 });
+
+test("estimateStop picks the half of an out-and-back loop from the Olho Vivo side", () => {
+  const loop = [A, B, C, D, C, B, A];
+  const offsets = stopOffsets(measure(loop), loop);
+  const length = offsets.at(-1)!;
+  const outbound: LatLon = [B[0] + 300 / 111_320, B[1]];
+  const positions = indexPositions({
+    hr: "10:00",
+    l: [
+      { c: "8000-10", cl: 1, sl: 1, lt0: "", lt1: "", qv: 1, vs: [vehicle("out", outbound)] },
+      { c: "8000-10", cl: 2, sl: 2, lt0: "", lt1: "", qv: 1, vs: [vehicle("back", outbound)] },
+    ],
+  });
+  const circular: StopPattern = {
+    route_id: "sp:8000-10",
+    direction_id: 0,
+    polyline: encodePolyline(loop),
+    stop_offsets_m: offsets,
+    stop_indexes: [5],
+    run_time_s: Math.round(0.5 * length),
+    circular: true,
+  };
+  const [line] = estimateStop([circular], positions, NOW);
+  assert.deepEqual(line.vehicles.map((bus) => [bus.p, bus.minutes]), [
+    ["back", Math.round((300 * 0.5 - 30) / 60)],
+    ["out", Math.round(((2 * EAST_M + 2 * NORTH_M - 300) * 0.5 - 30) / 60)],
+  ]);
+});
