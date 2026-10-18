@@ -73,16 +73,28 @@ test("summarize counts lines only for stops that Olho Vivo found", () => {
   );
   const byName = new Map(results.map((result) => [result.name, result]));
 
-  assert.deepEqual(byName.get("H1 stop_id found in Olho Vivo"), { name: "H1 stop_id found in Olho Vivo", passed: 1, total: 2, failures: ["2"] });
+  assert.deepEqual(byName.get("Olho Vivo has a forecast for the stop now"), {
+    name: "Olho Vivo has a forecast for the stop now",
+    passed: 1,
+    total: 2,
+    failures: ["2"],
+    gate: false,
+  });
   assert.equal(byName.get("H1 position within 50 m")?.passed, 0);
   assert.equal(byName.get("H3 direction_id = sl - 1")?.passed, 1);
   assert.equal(byName.get("H1 corridor cp found in GTFS")?.total, 0);
 });
 
 test("passes needs 95 % and at least one item", () => {
-  assert.equal(passes({ name: "", passed: 19, total: 20, failures: [] }), true);
-  assert.equal(passes({ name: "", passed: 18, total: 20, failures: [] }), false);
-  assert.equal(passes({ name: "", passed: 0, total: 0, failures: [] }), false);
+  assert.equal(passes({ name: "", passed: 19, total: 20, failures: [], gate: true }), true);
+  assert.equal(passes({ name: "", passed: 18, total: 20, failures: [], gate: true }), false);
+  assert.equal(passes({ name: "", passed: 0, total: 0, failures: [], gate: true }), false);
+});
+
+test("summarize makes every check a gate except the forecast coverage", () => {
+  const gates = summarize([], []).map((result) => [result.name, result.gate]);
+  assert.deepEqual(gates.filter(([, gate]) => !gate), [["Olho Vivo has a forecast for the stop now", false]]);
+  assert.equal(gates.length, 7);
 });
 
 test("sample is repeatable for one seed and picks distinct items", () => {

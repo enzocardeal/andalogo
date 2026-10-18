@@ -20,7 +20,7 @@ export type StopCheck = { stopId: string; found: boolean; distanceM: number | nu
 
 export type CorridorCheck = { cp: number; name: string; inGtfs: boolean; distanceM: number | null };
 
-export type Rate = { name: string; passed: number; total: number; failures: string[] };
+export type Rate = { name: string; passed: number; total: number; failures: string[]; gate: boolean };
 
 export function distanceMeters(a: Point, b: Point): number {
   const rad = Math.PI / 180;
@@ -65,9 +65,9 @@ export function checkCorridorStop(stop: CorridorStop, stops: Map<string, GtfsSto
   };
 }
 
-function rate<T>(name: string, items: T[], passed: (item: T) => boolean, label: (item: T) => string): Rate {
+function rate<T>(name: string, items: T[], passed: (item: T) => boolean, label: (item: T) => string, gate = true): Rate {
   const failed = items.filter((item) => !passed(item));
-  return { name, passed: items.length - failed.length, total: items.length, failures: failed.map(label) };
+  return { name, passed: items.length - failed.length, total: items.length, failures: failed.map(label), gate };
 }
 
 export function summarize(stops: StopCheck[], corridor: CorridorCheck[]): Rate[] {
@@ -76,7 +76,7 @@ export function summarize(stops: StopCheck[], corridor: CorridorCheck[]): Rate[]
   const lineLabel = (line: (typeof lines)[number]) => `stop ${line.stopId} line ${line.sign} sl ${line.sl}`;
   const near = (distanceM: number | null) => distanceM !== null && distanceM <= MAX_DISTANCE_M;
   return [
-    rate("H1 stop_id found in Olho Vivo", stops, (stop) => stop.found, (stop) => stop.stopId),
+    rate("Olho Vivo has a forecast for the stop now", stops, (stop) => stop.found, (stop) => stop.stopId, false),
     rate("H1 position within 50 m", found, (stop) => near(stop.distanceM), (stop) => `${stop.stopId} (${Math.round(stop.distanceM ?? 0)} m)`),
     rate("H1 corridor cp found in GTFS", corridor, (stop) => stop.inGtfs, (stop) => `${stop.cp} ${stop.name}`),
     rate("H1 corridor cp within 50 m", corridor.filter((stop) => stop.inGtfs), (stop) => near(stop.distanceM), (stop) => `${stop.cp} (${Math.round(stop.distanceM ?? 0)} m)`),

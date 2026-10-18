@@ -63,10 +63,10 @@ if (errors.length > 0) {
 console.log("");
 for (const result of results) {
   const percent = result.total === 0 ? "-" : `${((100 * result.passed) / result.total).toFixed(1)} %`;
-  console.log(`${passes(result) ? "PASS" : "FAIL"}  ${result.name}: ${result.passed}/${result.total} (${percent})`);
+  console.log(`${!result.gate ? "INFO" : passes(result) ? "PASS" : "FAIL"}  ${result.name}: ${result.passed}/${result.total} (${percent})`);
   for (const failure of result.failures.slice(0, MAX_LISTED_FAILURES)) {
     console.log(`        ${failure}`);
   }
 }
 
-process.exit(results.every(passes) && errors.length === 0 ? 0 : 1);
+process.exit(results.filter((result) => result.gate).every(passes) && errors.length === 0 ? 0 : 1);

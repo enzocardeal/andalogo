@@ -153,4 +153,4 @@ SPTrans changes the feed about once a week and ARTESP about once a month. ARTESP
 | H2 | GTFS `route_id` (for example `8000-10`) equals the Olho Vivo line sign `c`, and the route serves the stop |
 | H3 | GTFS `direction_id` equals Olho Vivo `sl - 1` |
 
-Each check passes at 95 % or more. The script exits with code 1 when a check fails.
+Each check passes at 95 % or more. The script exits with code 1 when a check fails. It also prints, as information only, how many sampled stops have a forecast at that moment: Olho Vivo answers `p: null` for a stop without a current forecast, so that share depends on the time of day (70 % on a Sunday afternoon in October 2026).
