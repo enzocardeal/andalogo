@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { liveLineFor, minutesUntil, nextBuses, sortByArrival, stopCode, toArrivals } from "./arrivals.ts";
+import { combineArrivals, liveLineFor, minutesUntil, nextBuses, sortByArrival, stopCode } from "./arrivals.ts";
 import type { StopPrediction, Vehicle } from "./olhovivo.ts";
 
 const NOW = new Date("2026-10-19T10:00:30-03:00");
@@ -40,12 +40,13 @@ test("minutesUntil handles midnight and late forecasts", () => {
   assert.equal(minutesUntil("09:59", "10:00"), 0);
 });
 
-test("toArrivals keeps up to three fresh vehicles per line, soonest first", () => {
-  const arrivals = toArrivals(
+test("combineArrivals keeps up to three fresh vehicles per line, soonest first", () => {
+  const arrivals = combineArrivals(
     prediction("10:00", [
       { c: "8000-10", sl: 2, vs: [vehicle("10:20"), vehicle("10:03", FRESH, false), vehicle("10:09"), vehicle("10:12"), vehicle("10:30"), vehicle("10:01", OLD)] },
       { c: "1012-10", sl: 1, vs: [] },
     ]),
+    null,
     NOW,
   );
   assert.deepEqual(arrivals, {
@@ -65,23 +66,50 @@ test("toArrivals keeps up to three fresh vehicles per line, soonest first", () =
   });
 });
 
-test("toArrivals reports an unknown stop, old positions and an old reference time", () => {
-  assert.deepEqual(toArrivals(prediction("10:00", null), NOW), { state: "not_covered", lines: [] });
-  assert.deepEqual(toArrivals(prediction("10:00", [{ c: "8000-10", sl: 1, vs: [vehicle("10:05", OLD)] }]), NOW), {
+test("combineArrivals reports an unknown stop, old positions and an old reference time", () => {
+  assert.deepEqual(combineArrivals(prediction("10:00", null), null, NOW), { state: "not_covered", lines: [] });
+  assert.deepEqual(combineArrivals(prediction("10:00", [{ c: "8000-10", sl: 1, vs: [vehicle("10:05", OLD)] }]), null, NOW), {
     state: "stale",
     lines: [],
   });
-  assert.deepEqual(toArrivals(prediction("09:40", [{ c: "8000-10", sl: 1, vs: [vehicle("09:45")] }]), NOW), {
+  assert.deepEqual(combineArrivals(prediction("09:40", [{ c: "8000-10", sl: 1, vs: [vehicle("09:45")] }]), null, NOW), {
     state: "stale",
     lines: [],
   });
 });
 
-test("toArrivals keeps a stop with lines but no located vehicle live", () => {
-  assert.deepEqual(toArrivals(prediction("10:00", [{ c: "8000-10", sl: 1, vs: [] }]), NOW), {
+test("combineArrivals keeps a stop with lines but no located vehicle live", () => {
+  assert.deepEqual(combineArrivals(prediction("10:00", [{ c: "8000-10", sl: 1, vs: [] }]), null, NOW), {
     state: "live",
     lines: [{ routeId: "sp:8000-10", directionId: 0, vehicles: [] }],
   });
+});
+
+test("combineArrivals adds GPS estimates for buses that SPTrans does not list", () => {
+  const gps = (p: string, minutes: number) => ({ p, minutes, accessible: true, ...AT });
+  const estimated = [
+    { routeId: "sp:8000-10", directionId: 1, vehicles: [gps("11111", 7), gps("22222", 4)] },
+    { routeId: "sp:917H-10", directionId: 0, vehicles: [gps("33333", 10)] },
+    { routeId: "sp:1012-10", directionId: 0, vehicles: [] },
+  ];
+  assert.deepEqual(combineArrivals(prediction("10:00", [{ c: "8000-10", sl: 2, vs: [vehicle("10:09")] }]), estimated, NOW), {
+    state: "live",
+    lines: [
+      { routeId: "sp:8000-10", directionId: 1, vehicles: [{ minutes: 4, accessible: true, ...AT }, { minutes: 9, accessible: true, ...AT }] },
+      { routeId: "sp:917H-10", directionId: 0, vehicles: [{ minutes: 10, accessible: true, ...AT }] },
+    ],
+  });
+  assert.deepEqual(combineArrivals(prediction("10:00", null), estimated.slice(1), NOW), {
+    state: "live",
+    lines: [{ routeId: "sp:917H-10", directionId: 0, vehicles: [{ minutes: 10, accessible: true, ...AT }] }],
+  });
+  assert.deepEqual(combineArrivals(null, estimated.slice(2), NOW), { state: "not_covered", lines: [] });
+});
+
+test("combineArrivals maps both sides of a circular line to its one GTFS direction", () => {
+  const loop = prediction("10:00", [{ c: "817C-10", sl: 2, vs: [vehicle("10:03")] }]);
+  assert.deepEqual(combineArrivals(loop, null, NOW, new Map([["sp:817C-10", 0]])).lines.map((line) => [line.routeId, line.directionId]), [["sp:817C-10", 0]]);
+  assert.deepEqual(combineArrivals(loop, null, NOW).lines.map((line) => [line.routeId, line.directionId]), [["sp:817C-10", 1]]);
 });
 
 test("liveLineFor and sortByArrival put lines with the soonest live vehicle first", () => {
@@ -113,6 +141,8 @@ test("nextBuses picks the soonest located buses across lines", () => {
     ],
   };
   assert.deepEqual(nextBuses(arrivals, 2).map((bus) => [bus.routeId, bus.minutes]), [["sp:B", 2], ["sp:A", 9]]);
+  assert.deepEqual(nextBuses(arrivals, 1, { routeId: "sp:A", directionId: 0 }).map((bus) => [bus.routeId, bus.minutes]), [["sp:A", 9]]);
+  assert.deepEqual(nextBuses(arrivals, 1, { routeId: "sp:A", directionId: 1 }), []);
   assert.deepEqual(nextBuses({ state: "stale", lines: [] }, 2), []);
   assert.deepEqual(nextBuses(null, 2), []);
 });

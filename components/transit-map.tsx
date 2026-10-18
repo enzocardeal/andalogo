@@ -212,7 +212,7 @@ export function TransitMap() {
     }
     controllerRef.current?.setSelected(view.stop);
     const stop = view.stop ? stopsRef.current.get(view.stop) : undefined;
-    if (!stop) {
+    if (!stop || view.route) {
       return;
     }
     const { clientWidth: width, clientHeight: height } = map.getContainer();
@@ -225,7 +225,7 @@ export function TransitMap() {
         offset: [0, (SEARCH_HEIGHT + visibleBottom) / 2 - height / 2],
       });
     }
-  }, [ready, view.stop]);
+  }, [ready, view.stop, view.route]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -236,10 +236,12 @@ export function TransitMap() {
     if (!map || !maplibregl || !selectedStop || arrivals?.state !== "live") {
       return;
     }
-    const buses = nextBuses(arrivals, NEXT_BUSES);
+    const buses = view.route
+      ? nextBuses(arrivals, 1, { routeId: view.route, directionId: view.dir })
+      : nextBuses(arrivals, NEXT_BUSES);
     const lines = stopLines?.stopId === selectedStop.id ? stopLines.lines : [];
     const removeMarkers = showLiveMarkers(maplibregl, map, buses, lines);
-    if (buses.length > 0 && framedRef.current !== selectedStop.id) {
+    if (!view.route && buses.length > 0 && framedRef.current !== selectedStop.id) {
       framedRef.current = selectedStop.id;
       const { clientWidth: width, clientHeight: height } = map.getContainer();
       const visibleBottom = height * (1 - SHEET_SHARE);
@@ -258,7 +260,7 @@ export function TransitMap() {
       }
     }
     return removeMarkers;
-  }, [arrivals, selectedStop, stopLines, view.stop]);
+  }, [arrivals, selectedStop, stopLines, view.stop, view.route, view.dir]);
 
   useEffect(() => {
     if (!view.route) {
@@ -330,24 +332,24 @@ export function TransitMap() {
           {error === "map" ? strings.map.failed : strings.map.stopsFailed}
         </p>
       )}
-      {view.stop ? (
-        <StopSheet
-          stopId={view.stop}
-          arrivals={arrivals}
-          onLoaded={(stop: StopDetails | null) => setStopLines(stop ? { stopId: stop.id, lines: stop.lines } : null)}
-          onClose={() => close({ stop: null })}
-          onRoute={(routeId, dir) => navigate({ route: routeId, dir, stop: null }, "push")}
-          onFavoriteChange={changeFavorite}
+      {view.route ? (
+        <RouteSheet
+          route={route?.route ?? null}
+          failed={route?.failed ?? false}
+          dir={view.dir}
+          onDirection={(dir) => navigate({ dir })}
+          onStop={(id) => navigate({ stop: id, route: null }, "push")}
+          onClose={() => close({ route: null })}
         />
       ) : (
-        view.route && (
-          <RouteSheet
-            route={route?.route ?? null}
-            failed={route?.failed ?? false}
-            dir={view.dir}
-            onDirection={(dir) => navigate({ dir })}
-            onStop={(id) => navigate({ stop: id }, "push")}
-            onClose={() => close({ route: null })}
+        view.stop && (
+          <StopSheet
+            stopId={view.stop}
+            arrivals={arrivals}
+            onLoaded={(stop: StopDetails | null) => setStopLines(stop ? { stopId: stop.id, lines: stop.lines } : null)}
+            onClose={() => close({ stop: null })}
+            onRoute={(routeId, dir) => navigate({ route: routeId, dir }, "push")}
+            onFavoriteChange={changeFavorite}
           />
         )
       )}

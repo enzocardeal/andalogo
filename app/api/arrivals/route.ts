@@ -1,5 +1,6 @@
 import { stopCode } from "@/lib/arrivals";
 import { createArrivalsService } from "@/lib/arrivals-service";
+import type { StopPattern } from "@/lib/eta";
 import { createClient } from "@/lib/supabase/server";
 
 const arrivalsFor = createArrivalsService({
@@ -17,5 +18,12 @@ export async function GET(request: Request) {
   if (!code) {
     return Response.json({ error: "invalid stop" }, { status: 400 });
   }
-  return Response.json(await arrivalsFor(code), { headers: { "Cache-Control": "private, no-store" } });
+  const loadPatterns = async () => {
+    const { data: patterns, error } = await supabase.rpc("get_stop_eta", { p_stop_id: `sp:${code}` });
+    if (error) {
+      throw new Error(`get_stop_eta failed: ${error.message}`);
+    }
+    return patterns as StopPattern[];
+  };
+  return Response.json(await arrivalsFor(code, loadPatterns), { headers: { "Cache-Control": "private, no-store" } });
 }

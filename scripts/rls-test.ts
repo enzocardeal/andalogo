@@ -15,6 +15,7 @@ type Result<T> = { data: T; error: null } | { data: unknown; error: { code?: str
 
 const DENIED = /permission denied/;
 const INVITE_CAP = 11;
+const INT4 = 23;
 const REFERENCE_TABLES: Record<string, string> = {
   feed_versions: "feed",
   routes: "id",
@@ -101,8 +102,8 @@ before(async () => {
       (${stopId}, 'sptrans', ${`rls-${run}`}, 'Parada RLS', -23.55, -46.63, 'bus', null),
       (${squareId}, 'sptrans', ${`rls-square-${run}`}, ${`Praça da Sé ${run}`}, -23.5505, -46.6333, 'metro', '#EE372F')`;
   await sql`
-    insert into public.route_patterns (route_id, direction_id, headsign, polyline, stop_ids)
-    values (${busId}, 0, 'Jd. B', '_p~iF~ps|U', ${sql.array([squareId, stopId])})`;
+    insert into public.route_patterns (route_id, direction_id, headsign, polyline, stop_ids, stop_offsets_m, run_time_s)
+    values (${busId}, 0, 'Jd. B', '_p~iF~ps|U', ${sql.array([squareId, stopId])}, ${sql.array([0, 500], INT4)}, 120)`;
   await sql`
     insert into public.routes (id, feed, short_name, long_name, mode, color, text_color)
     values (${emtuId}, 'sptrans', '001', 'Cotia - Sao Paulo', 'emtu', '#1D4ED8', '#FFFFFF')`;
@@ -376,6 +377,14 @@ test("search finds lines by sign and stops by name, without accents", async () =
   assert.deepEqual(wildcard, { routes: [], stops: [] });
 });
 
+test("get_stop_eta returns the SPTrans bus patterns that pass the stop", async () => {
+  const patterns = ok(await member.client.rpc("get_stop_eta", { p_stop_id: stopId }), "get_stop_eta");
+  assert.deepEqual(patterns, [
+    { route_id: busId, direction_id: 0, polyline: "_p~iF~ps|U", stop_offsets_m: [0, 500], stop_indexes: [1], run_time_s: 120, circular: true },
+  ]);
+  assert.deepEqual(ok(await member.client.rpc("get_stop_eta", { p_stop_id: squareId }), "get_stop_eta without stop_routes"), []);
+});
+
 test("anon cannot execute the favorite, route or search RPCs", async () => {
   const calls: [string, Record<string, unknown>][] = [
     ["add_favorite", { p_stop_id: stopId }],
@@ -384,6 +393,7 @@ test("anon cannot execute the favorite, route or search RPCs", async () => {
     ["get_favorites", {}],
     ["get_route", { p_route_id: busId }],
     ["search", { p_query: "se" }],
+    ["get_stop_eta", { p_stop_id: stopId }],
   ];
   for (const [fn, args] of calls) {
     refused(await anon.rpc(fn, args), "42501", DENIED, `anon ${fn}`);

@@ -3,6 +3,7 @@ import type { Feed } from "../transit.ts";
 import type { FeedTables } from "./build.ts";
 
 const CHUNK_ROWS = 1000;
+const INT4 = 23;
 
 export type FeedVersion = { sha256: string; stopsFile: string };
 
@@ -26,7 +27,11 @@ export async function replaceFeed(sql: Sql, feed: Feed, tables: FeedTables, vers
     await insertAll(tx, "stops", tables.stops);
     await insertAll(tx, "stop_routes", tables.stopRoutes);
     await insertAll(tx, "headways", tables.headways);
-    await insertAll(tx, "route_patterns", tables.patterns);
+    await insertAll(
+      tx,
+      "route_patterns",
+      tables.patterns.map((pattern) => ({ ...pattern, stop_offsets_m: tx.array(pattern.stop_offsets_m, INT4) })),
+    );
     await insertAll(tx, "timetable_patterns", tables.timetablePatterns);
     await insertAll(tx, "timetable_stops", tables.timetableStops);
     await insertAll(tx, "timetable_trips", tables.timetableTrips);

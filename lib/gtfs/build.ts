@@ -1,4 +1,5 @@
-import { encodePolyline, type LatLon } from "../polyline.ts";
+import { measure, stopOffsets } from "../eta.ts";
+import { decodePolyline, encodePolyline, type LatLon } from "../polyline.ts";
 import type { MapStop } from "../stops-file.ts";
 import { FEED_PREFIX, RAIL_MODES, type Feed, type Mode } from "../transit.ts";
 import { simplify } from "./simplify.ts";
@@ -36,6 +37,8 @@ export type RoutePatternRow = {
   headsign: string;
   polyline: string;
   stop_ids: string[];
+  stop_offsets_m: number[];
+  run_time_s: number;
 };
 
 export type TimetablePatternRow = { id: string; route_id: string; direction_id: number; headsign: string };
@@ -219,12 +222,16 @@ export function buildFeed(feed: Feed, input: FeedInput): FeedTables {
     const trip = trips.get(tripId)!;
     const shape = input.shapes.get(trip.shapeId);
     const line = shape && shape.length >= 2 ? shape : stopIds.map((id) => coordinates.get(id)!);
+    const polyline = encodePolyline(simplify(line, SHAPE_TOLERANCE_M));
+    const { departures } = input.tripStops.get(tripId)!;
     return {
       route_id: routes.get(trip.routeId)!.id,
       direction_id: trip.directionId,
       headsign: trip.headsign,
-      polyline: encodePolyline(simplify(line, SHAPE_TOLERANCE_M)),
+      polyline,
       stop_ids: stopIds.map(idOf),
+      stop_offsets_m: stopOffsets(measure(decodePolyline(polyline)), stopIds.map((id) => coordinates.get(id))),
+      run_time_s: departures.at(-1)! - departures[0],
     };
   });
 

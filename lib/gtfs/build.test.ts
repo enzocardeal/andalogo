@@ -35,7 +35,7 @@ const INPUT: FeedInput = {
     { stop_id: "4", stop_name: "Funicular", stop_lat: "-23.7", stop_lon: "-46.8" },
   ],
   tripStops: new Map([
-    ["bus-0", trip(["1", "2"])],
+    ["bus-0", trip(["1", "2"], [0, 600])],
     ["bus-1", trip(["1"], [3600])],
     ["l1-0", trip(["2"])],
     ["fun-0", trip(["4"])],
@@ -142,9 +142,11 @@ test("buildFeed keeps the most common stop sequence per route and direction, wit
       headsign: "Jd. B",
       polyline: [[-23.5, -46.6], [-23.52, -46.61], [-23.55, -46.63]],
       stop_ids: ["sp:1", "sp:2"],
+      stop_offsets_m: [0, 6364],
+      run_time_s: 600,
     },
-    { route_id: "sp:1012-10", direction_id: 1, headsign: "Term. A", polyline: [[-23.5, -46.6]], stop_ids: ["sp:1"] },
-    { route_id: "sp:METRÔ L1", direction_id: 0, headsign: "Jabaquara", polyline: [[-23.55, -46.63]], stop_ids: ["sp:2"] },
+    { route_id: "sp:1012-10", direction_id: 1, headsign: "Term. A", polyline: [[-23.5, -46.6]], stop_ids: ["sp:1"], stop_offsets_m: [0], run_time_s: 0 },
+    { route_id: "sp:METRÔ L1", direction_id: 0, headsign: "Jabaquara", polyline: [[-23.55, -46.63]], stop_ids: ["sp:2"], stop_offsets_m: [0], run_time_s: 0 },
   ]);
 });
 

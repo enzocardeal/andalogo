@@ -19,6 +19,10 @@ export type StopPrediction = {
   p: { cp: number; np: string; py: number; px: number; l: PredictedLine[] } | null;
 };
 
+export type PositionLine = Omit<PredictedLine, "vs"> & { vs: Omit<Vehicle, "t">[] };
+
+export type Positions = { hr: string; l: PositionLine[] };
+
 export type Corridor = { cc: number; nc: string };
 
 export type CorridorStop = { cp: number; np: string; ed: string; py: number; px: number };
