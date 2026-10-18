@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createMotion, glide, targetAlong, type LineMotion, type PlacedTrack } from "./bus-motion.ts";
+import { createMotion, glide, passedStops, targetAlong, type LineMotion, type PlacedTrack } from "./bus-motion.ts";
 import { measure } from "./eta.ts";
 
 const T0 = Date.parse("2026-10-19T10:00:00-03:00");
@@ -42,4 +42,12 @@ test("createMotion keeps each drawn position between frames and drops buses that
   assert.equal(frame([], T0 + 11_000, 0.5).size, 0);
   const restart = frame([{ ...bus, track: track(3000) }], T0 + 12_000, 0.016).get("a")!;
   assert.ok(restart.lon > later.lon);
+});
+
+test("passedStops counts the stops at least 20 m behind the bus", () => {
+  assert.equal(passedStops([0, 2000, 4000], 0), 0);
+  assert.equal(passedStops([0, 2000, 4000], 25), 1);
+  assert.equal(passedStops([0, 2000, 4000], 2010), 1);
+  assert.equal(passedStops([0, 2000, 4000], 2020), 2);
+  assert.equal(passedStops([0, 2000, 4000], 9000), 3);
 });

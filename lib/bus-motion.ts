@@ -6,6 +6,7 @@ const MAX_EXTRAPOLATION_S = 90;
 const GLIDE_S = 1;
 const JUMP_AHEAD_M = 1000;
 const JUMP_BEHIND_M = 500;
+const PASSED_M = 20;
 
 export type LineMotion = { route: Route; offsets: number[]; paces: number[]; fallback: number };
 
@@ -34,6 +35,10 @@ export function glide(drawnM: number | null, targetM: number, dtS: number): numb
     return drawnM;
   }
   return drawnM + (targetM - drawnM) * (1 - Math.exp(-dtS / GLIDE_S));
+}
+
+export function passedStops(offsets: number[], alongM: number): number {
+  return offsets.filter((offset) => offset <= alongM - PASSED_M).length;
 }
 
 export function createMotion() {

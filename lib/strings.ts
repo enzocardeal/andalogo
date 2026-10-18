@@ -49,6 +49,9 @@ export const strings = {
     towards: "Sentido",
     switchDirection: "Trocar sentido",
     stops: "paradas",
+    yourStop: "sua parada",
+    passed: "já passou",
+    busHere: "ônibus aqui",
   },
   search: {
     label: "Buscar linha ou parada",

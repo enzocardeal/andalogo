@@ -21,6 +21,7 @@ import { strings } from "@/lib/strings";
 import { createClient } from "@/lib/supabase/client";
 import type { RouteDetails, StopDetails, StopLine } from "@/lib/transit";
 import { useArrivals } from "@/lib/use-arrivals";
+import { useBusProgress } from "@/lib/use-bus-progress";
 import { linesKey, useBusTracks } from "@/lib/use-bus-tracks";
 import { useColorScheme } from "@/lib/use-color-scheme";
 
@@ -95,6 +96,12 @@ export function TransitMap() {
       : []
     : nextBuses(arrivals, NEXT_BUSES);
   const tracks = useBusTracks(linesKey(trackedLines));
+  const nextLineBus =
+    view.route && selectedStop ? (nextBuses(arrivals, 1, { routeId: view.route, directionId: view.dir })[0] ?? null) : null;
+  const lineTracks = view.route
+    ? (tracks.find((line) => line.routeId === view.route && line.directionId === view.dir) ?? null)
+    : null;
+  const busAlongM = useBusProgress(lineTracks, nextLineBus?.p ?? null);
 
   const navigate = useCallback((next: Partial<MapView>, mode: "push" | "replace" = "replace") => {
     const href = mapHref({ ...viewRef.current, ...next });
@@ -383,6 +390,8 @@ export function TransitMap() {
           route={route?.route ?? null}
           failed={route?.failed ?? false}
           dir={view.dir}
+          selectedStopId={view.stop}
+          progress={lineTracks && busAlongM !== null ? { offsets: lineTracks.stopOffsetsM, alongM: busAlongM } : null}
           onDirection={(dir) => navigate({ dir })}
           onStop={(id) => navigate({ stop: id, route: null }, "push")}
           onClose={() => close({ route: null })}

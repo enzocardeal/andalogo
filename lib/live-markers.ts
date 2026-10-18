@@ -1,13 +1,8 @@
 import type { Map as MapLibreMap, Marker } from "maplibre-gl";
 import type { NextBus } from "./arrivals.ts";
 import { createMotion, type MovingBus } from "./bus-motion.ts";
-import { LIVE_ICON_SVG } from "./live-icon.ts";
+import { BUS_ICON_SVG, LIVE_ICON_SVG } from "./live-icon.ts";
 import type { StopLine } from "./transit.ts";
-
-const BUS_GLYPH =
-  '<svg viewBox="0 0 16 16" width="12" height="12" fill="currentColor" aria-hidden="true">' +
-  '<rect x="3" y="1.5" width="10" height="11" rx="2"/><rect x="4.5" y="3" width="7" height="4" rx="0.8" fill="var(--glyph-window)"/>' +
-  '<rect x="4" y="12" width="2.4" height="2.5" rx="0.8"/><rect x="9.6" y="12" width="2.4" height="2.5" rx="0.8"/></svg>';
 
 const ICON_CENTER_PX = 31;
 
@@ -32,7 +27,7 @@ function busElement(bus: ShownBus): { element: HTMLElement; arrow: HTMLElement }
   icon.className = "live-bus-icon";
   icon.style.backgroundColor = bus.color;
   icon.style.setProperty("--glyph-window", bus.color);
-  icon.innerHTML = BUS_GLYPH;
+  icon.innerHTML = BUS_ICON_SVG;
   const live = document.createElement("span");
   live.className = "live-bus-signal";
   live.innerHTML = LIVE_ICON_SVG;
