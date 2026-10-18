@@ -28,8 +28,17 @@ test("mapHref and parseMapView keep the stop, the route and the direction", () =
   assert.equal(mapHref({ stop: null, route: null, dir: 0 }), "/");
   assert.equal(mapHref({ stop: "sp:18848", route: null, dir: 1 }), "/?stop=sp%3A18848");
   const href = mapHref({ stop: "sp:1", route: "sp:METRÔ L1", dir: 1 });
-  assert.deepEqual(parseMapView(new URL(href, "https://x").searchParams), { stop: "sp:1", route: "sp:METRÔ L1", dir: 1 });
-  assert.deepEqual(parseMapView(new URLSearchParams("dir=7")), { stop: null, route: null, dir: 0 });
+  assert.deepEqual(parseMapView(new URL(href, "https://x").searchParams), { stop: "sp:1", route: "sp:METRÔ L1", dir: 1, near: null });
+  assert.deepEqual(parseMapView(new URLSearchParams("dir=7")), { stop: null, route: null, dir: 0, near: null });
+});
+
+test("mapHref and parseMapView keep a chosen place", () => {
+  const near = { lat: -23.540512, lon: -46.570498, label: "Bráz Pizzaria" };
+  const href = mapHref({ stop: "sp:1", route: null, dir: 0, near });
+  assert.equal(href, "/?stop=sp%3A1&near=-23.54051%2C-46.57050&label=Br%C3%A1z+Pizzaria");
+  assert.deepEqual(parseMapView(new URL(href, "https://x").searchParams).near, { lat: -23.54051, lon: -46.5705, label: "Bráz Pizzaria" });
+  assert.equal(parseMapView(new URLSearchParams("near=abc")).near, null);
+  assert.deepEqual(parseMapView(new URLSearchParams("near=-23.5,-46.6")).near, { lat: -23.5, lon: -46.6, label: "" });
 });
 
 test("routeGeoJSON draws the pattern of the direction, or the first one", () => {

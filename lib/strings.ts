@@ -54,13 +54,21 @@ export const strings = {
     busHere: "ônibus aqui",
   },
   search: {
-    label: "Buscar linha ou parada",
-    placeholder: "Buscar linha ou parada",
+    label: "Buscar linha, parada ou lugar",
+    placeholder: "Buscar linha, parada ou lugar",
     clear: "Limpar busca",
     lines: "Linhas",
     stops: "Paradas",
+    places: "Lugares",
     empty: "Nada encontrado.",
     failed: "A busca falhou. Tente de novo.",
+    placesFailed: "Não foi possível buscar lugares agora.",
+  },
+  place: {
+    near: "Perto de",
+    none: "Nenhuma parada a até 1 km.",
+    walk: "a pé",
+    close: "Fechar",
   },
   favorites: {
     title: "Paradas favoritas",

@@ -3,8 +3,9 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Map as MapLibreMap, StyleSpecification } from "maplibre-gl";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MapSearch } from "@/components/map-search";
+import { PlaceSheet } from "@/components/place-sheet";
 import { RouteSheet } from "@/components/route-sheet";
 import { StopSheet } from "@/components/stop-sheet";
 import { nextBuses } from "@/lib/arrivals";
@@ -16,6 +17,7 @@ import { CLICKABLE_LAYERS, EMPTY_COLLECTION } from "@/lib/map-layers";
 import { loadFavoriteIds, loadMapStops } from "@/lib/map-stops";
 import { transitStyle } from "@/lib/map-style";
 import { DEFAULT_ROUTE_COLOR, mapHref, parseMapView, routeGeoJSON, SHEET_SHARE, type MapView } from "@/lib/map-view";
+import { nearbyStops } from "@/lib/places";
 import type { MapStop } from "@/lib/stops-file";
 import { strings } from "@/lib/strings";
 import { createClient } from "@/lib/supabase/client";
@@ -78,6 +80,7 @@ export function TransitMap() {
   const mapRef = useRef<MapLibreMap | null>(null);
   const maplibreRef = useRef<typeof import("maplibre-gl") | null>(null);
   const framedRef = useRef<string | null>(null);
+  const placeFramedRef = useRef<string | null>(null);
   const busLayerRef = useRef<BusLayer | null>(null);
   const controllerRef = useRef<MapController | null>(null);
   const stopsRef = useRef(new Map<string, MapStop>());
@@ -86,6 +89,7 @@ export function TransitMap() {
   const [loadedRoute, setLoadedRoute] = useState<LoadedRoute | null>(null);
   const [favorites, setFavorites] = useState<ReadonlySet<string>>(new Set());
   const [stopLines, setStopLines] = useState<{ stopId: string; lines: StopLine[] } | null>(null);
+  const [stopCount, setStopCount] = useState(0);
 
   const selectedStop = ready && view.stop ? stopsRef.current.get(view.stop) : undefined;
   const arrivals = useArrivals(selectedStop?.mode === "bus" && selectedStop.id.startsWith("sp:") ? selectedStop.id : null);
@@ -102,6 +106,15 @@ export function TransitMap() {
     ? (tracks.find((line) => line.routeId === view.route && line.directionId === view.dir) ?? null)
     : null;
   const busAlongM = useBusProgress(lineTracks, nextLineBus?.p ?? null);
+  const nearLat = view.near?.lat;
+  const nearLon = view.near?.lon;
+  const nearby = useMemo(
+    () =>
+      ready && stopCount > 0 && nearLat !== undefined && nearLon !== undefined
+        ? nearbyStops(stopsRef.current.values(), { lat: nearLat, lon: nearLon })
+        : null,
+    [ready, stopCount, nearLat, nearLon],
+  );
 
   const navigate = useCallback((next: Partial<MapView>, mode: "push" | "replace" = "replace") => {
     const href = mapHref({ ...viewRef.current, ...next });
@@ -132,7 +145,7 @@ export function TransitMap() {
     loadFavoriteIds()
       .then((ids) => !cancelled && setFavorites(new Set(ids)))
       .catch((reason: unknown) => console.error("favorites failed:", reason));
-    const startsAtPlace = viewRef.current.stop !== null || viewRef.current.route !== null;
+    const startsAtPlace = viewRef.current.stop !== null || viewRef.current.route !== null || Boolean(viewRef.current.near);
     let stopLocationDot = () => {};
 
     Promise.all([import("maplibre-gl"), loadBaseStyle()])
@@ -177,6 +190,7 @@ export function TransitMap() {
         stops.then(({ loaded, reason }) => {
           if (loaded) {
             stopsRef.current = new Map(loaded.map((stop) => [stop.id, stop]));
+            setStopCount(loaded.length);
           } else {
             console.error("stops failed:", reason);
             setError("stops");
@@ -356,6 +370,53 @@ export function TransitMap() {
     }
   }, [ready, route, view.dir, view.stop]);
 
+  useEffect(() => {
+    const map = mapRef.current;
+    const maplibregl = maplibreRef.current;
+    if (!ready || !map || !maplibregl || nearLat === undefined || nearLon === undefined) {
+      return;
+    }
+    const element = document.createElement("div");
+    element.className = "place-pin";
+    element.append(document.createElement("span"));
+    const marker = new maplibregl.Marker({ element, anchor: "bottom" }).setLngLat([nearLon, nearLat]).addTo(map);
+    return () => {
+      marker.remove();
+    };
+  }, [ready, nearLat, nearLon]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (nearLat === undefined || nearLon === undefined) {
+      placeFramedRef.current = null;
+    }
+    if (!ready || !map || !nearby || nearLat === undefined || nearLon === undefined || view.stop || view.route) {
+      return;
+    }
+    const key = `${nearLat},${nearLon}`;
+    if (placeFramedRef.current === key) {
+      return;
+    }
+    placeFramedRef.current = key;
+    const { clientHeight: height } = map.getContainer();
+    const visibleBottom = height * (1 - SHEET_SHARE);
+    if (nearby.length === 0) {
+      map.easeTo({
+        center: [nearLon, nearLat],
+        zoom: Math.max(map.getZoom(), STOP_ZOOM - 1),
+        offset: [0, (SEARCH_HEIGHT + visibleBottom) / 2 - height / 2],
+      });
+      return;
+    }
+    const points = [{ lat: nearLat, lon: nearLon }, ...nearby];
+    const lons = points.map((point) => point.lon);
+    const lats = points.map((point) => point.lat);
+    map.fitBounds([Math.min(...lons), Math.min(...lats), Math.max(...lons), Math.max(...lats)], {
+      padding: { top: SEARCH_HEIGHT + 24, bottom: height - visibleBottom + 60, left: 64, right: 64 },
+      maxZoom: STOP_ZOOM,
+    });
+  }, [ready, nearby, nearLat, nearLon, view.stop, view.route]);
+
   function changeFavorite(stopId: string, favorite: boolean) {
     setFavorites((current) => {
       const next = new Set(current);
@@ -374,8 +435,13 @@ export function TransitMap() {
         <div ref={container} aria-label={strings.map.label} className="h-full w-full" />
       </div>
       <MapSearch
-        onRoute={(id) => navigate({ route: id, dir: 0, stop: null }, "push")}
-        onStop={(id) => navigate({ stop: id, route: null }, "push")}
+        onRoute={(id) => navigate({ route: id, dir: 0, stop: null, near: null }, "push")}
+        onStop={(id) => navigate({ stop: id, route: null, near: null }, "push")}
+        onPlace={(place) => navigate({ near: { lat: place.lat, lon: place.lon, label: place.name }, stop: null, route: null }, "push")}
+        bias={() => {
+          const center = mapRef.current?.getCenter();
+          return center ? { lat: center.lat, lon: center.lng } : null;
+        }}
       />
       {error && (
         <p
@@ -397,15 +463,22 @@ export function TransitMap() {
           onStop={(id) => navigate({ stop: id, route: null }, "push")}
           onClose={() => close({ route: null })}
         />
+      ) : view.stop ? (
+        <StopSheet
+          stopId={view.stop}
+          arrivals={arrivals}
+          onLoaded={(stop: StopDetails | null) => setStopLines(stop ? { stopId: stop.id, lines: stop.lines } : null)}
+          onClose={() => close({ stop: null })}
+          onRoute={(routeId, dir) => navigate({ route: routeId, dir }, "push")}
+          onFavoriteChange={changeFavorite}
+        />
       ) : (
-        view.stop && (
-          <StopSheet
-            stopId={view.stop}
-            arrivals={arrivals}
-            onLoaded={(stop: StopDetails | null) => setStopLines(stop ? { stopId: stop.id, lines: stop.lines } : null)}
-            onClose={() => close({ stop: null })}
-            onRoute={(routeId, dir) => navigate({ route: routeId, dir }, "push")}
-            onFavoriteChange={changeFavorite}
+        view.near && (
+          <PlaceSheet
+            label={view.near.label}
+            stops={nearby}
+            onStop={(id) => navigate({ stop: id }, "push")}
+            onClose={() => close({ near: null })}
           />
         )
       )}

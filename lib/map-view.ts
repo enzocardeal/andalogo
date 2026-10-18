@@ -1,7 +1,9 @@
 import { decodePolyline } from "./polyline.ts";
 import type { RouteDetails } from "./transit.ts";
 
-export type MapView = { stop: string | null; route: string | null; dir: number };
+export type NearPlace = { lat: number; lon: number; label: string };
+
+export type MapView = { stop: string | null; route: string | null; dir: number; near?: NearPlace | null };
 
 export const DEFAULT_ROUTE_COLOR = "#334155";
 
@@ -16,12 +18,26 @@ export function mapHref(view: MapView): string {
     params.set("route", view.route);
     params.set("dir", String(view.dir));
   }
+  if (view.near) {
+    params.set("near", `${view.near.lat.toFixed(5)},${view.near.lon.toFixed(5)}`);
+    params.set("label", view.near.label);
+  }
   const query = params.toString();
   return query ? `/?${query}` : "/";
 }
 
+function parseNear(near: string | null, label: string | null): NearPlace | null {
+  const [lat, lon] = (near ?? "").split(",").map(Number);
+  return near && Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon, label: label ?? "" } : null;
+}
+
 export function parseMapView(params: { get(name: string): string | null }): MapView {
-  return { stop: params.get("stop"), route: params.get("route"), dir: params.get("dir") === "1" ? 1 : 0 };
+  return {
+    stop: params.get("stop"),
+    route: params.get("route"),
+    dir: params.get("dir") === "1" ? 1 : 0,
+    near: parseNear(params.get("near"), params.get("label")),
+  };
 }
 
 export function patternOf(route: RouteDetails, dir: number) {

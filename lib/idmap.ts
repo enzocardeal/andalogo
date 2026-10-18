@@ -1,12 +1,9 @@
+import { distanceMeters } from "./geo.ts";
 import { routeKey, type GtfsStop } from "./gtfs/load.ts";
 import type { CorridorStop, StopPrediction } from "./olhovivo.ts";
 
 export const MAX_DISTANCE_M = 50;
 export const PASS_RATE = 0.95;
-
-const EARTH_RADIUS_M = 6_371_000;
-
-type Point = { lat: number; lon: number };
 
 export type LineCheck = {
   sign: string;
@@ -21,14 +18,6 @@ export type StopCheck = { stopId: string; found: boolean; distanceM: number | nu
 export type CorridorCheck = { cp: number; name: string; inGtfs: boolean; distanceM: number | null };
 
 export type Rate = { name: string; passed: number; total: number; failures: string[]; gate: boolean };
-
-export function distanceMeters(a: Point, b: Point): number {
-  const rad = Math.PI / 180;
-  const dLat = (b.lat - a.lat) * rad;
-  const dLon = (b.lon - a.lon) * rad;
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLon / 2) ** 2;
-  return 2 * EARTH_RADIUS_M * Math.asin(Math.sqrt(h));
-}
 
 export function checkStop(
   stop: GtfsStop,

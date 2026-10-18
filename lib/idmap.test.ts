@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { checkCorridorStop, checkStop, distanceMeters, passes, sample, summarize } from "./idmap.ts";
+import { checkCorridorStop, checkStop, passes, sample, summarize } from "./idmap.ts";
 import type { StopPrediction } from "./olhovivo.ts";
 
 const SE = { id: "18848", name: "Praça da Sé", lat: -23.5505, lon: -46.6339 };
@@ -17,12 +17,6 @@ function prediction(lines: { c: string; sl: number }[], py = SE.lat, px = SE.lon
     },
   };
 }
-
-test("distanceMeters measures short distances in São Paulo", () => {
-  assert.equal(distanceMeters(SE, SE), 0);
-  const d = distanceMeters(SE, { lat: SE.lat + 0.001, lon: SE.lon });
-  assert.ok(d > 110 && d < 112, `${d}`);
-});
 
 test("checkStop maps sign and direction to GTFS route keys", () => {
   const served = new Set(["8000-10|0", "8000-10|1", "1012-10|0"]);
