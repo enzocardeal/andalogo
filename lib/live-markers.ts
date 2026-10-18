@@ -2,7 +2,6 @@ import type { Map as MapLibreMap, Marker } from "maplibre-gl";
 import type { NextBus } from "./arrivals.ts";
 import { LIVE_ICON_SVG } from "./live-icon.ts";
 import { DEFAULT_ROUTE_COLOR } from "./map-view.ts";
-import { strings } from "./strings.ts";
 import type { StopLine } from "./transit.ts";
 
 const BUS_GLYPH =
@@ -11,8 +10,7 @@ const BUS_GLYPH =
   '<rect x="4" y="12" width="2.4" height="2.5" rx="0.8"/><rect x="9.6" y="12" width="2.4" height="2.5" rx="0.8"/></svg>';
 
 export function busLabel(bus: NextBus, line: StopLine | undefined): string {
-  const name = line?.short_name ?? bus.routeId.replace(/^sp:/, "");
-  return `${name} · ${bus.minutes === 0 ? strings.stop.now : `${bus.minutes} min`}`;
+  return line?.short_name ?? bus.routeId.replace(/^sp:/, "");
 }
 
 function busElement(bus: NextBus, line: StopLine | undefined): HTMLElement {

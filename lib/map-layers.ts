@@ -103,7 +103,7 @@ export function stopFilters(selected: string | null, favorites: Iterable<string>
   const ids = idIn(favorites);
   const notSelected: ExpressionSpecification = ["!", idIs(selected)];
   return {
-    [BUS_STOPS_LAYER]: ["all", IS_SIGN, notSelected],
+    [BUS_STOPS_LAYER]: ["all", IS_SIGN, notSelected, ["!", ids]],
     [FAVORITE_LAYER]: ["all", ids, IS_RAIL],
     [FAVORITE_SIGN_LAYER]: ["all", ids, IS_SIGN, notSelected],
     [FAVORITE_BADGE_LAYER]: ids,

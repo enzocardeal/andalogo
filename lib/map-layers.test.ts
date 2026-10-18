@@ -47,13 +47,13 @@ test("every sign image has a style in both schemes, with a stronger outline when
   assert.notDeepEqual(signStyles("light")[SIGN_IMAGES.bus], signStyles("dark")[SIGN_IMAGES.bus]);
 });
 
-test("stopFilters hides the selected stop from the normal sign layers and splits stations from signs", () => {
+test("stopFilters draws each stop sign once and splits stations from signs", () => {
   const isRail = ["in", ["get", "mode"], ["literal", ["metro", "cptm"]]];
   const isSign = ["!", isRail];
   const ids = ["in", ["get", "id"], ["literal", ["sp:1", "sp:2"]]];
   const notSelected = ["!", ["==", ["get", "id"], "sp:1"]];
   assert.deepEqual(stopFilters("sp:1", new Set(["sp:1", "sp:2"])), {
-    "bus-stops": ["all", isSign, notSelected],
+    "bus-stops": ["all", isSign, notSelected, ["!", ids]],
     "favorite-stops": ["all", ids, isRail],
     "favorite-signs": ["all", ids, isSign, notSelected],
     "favorite-badges": ids,

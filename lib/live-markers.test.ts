@@ -16,8 +16,7 @@ const LINE = {
   departures: null,
 };
 
-test("busLabel shows the line sign and the minutes, or now", () => {
-  assert.equal(busLabel(BUS, LINE), "7281-10 · 5 min");
-  assert.equal(busLabel({ ...BUS, minutes: 0 }, LINE), "7281-10 · agora");
-  assert.equal(busLabel(BUS, undefined), "7281-10 · 5 min");
+test("busLabel shows the line sign only", () => {
+  assert.equal(busLabel(BUS, { ...LINE, short_name: "7281" }), "7281");
+  assert.equal(busLabel(BUS, undefined), "7281-10");
 });

@@ -241,8 +241,9 @@ export function TransitMap() {
       : nextBuses(arrivals, NEXT_BUSES);
     const lines = stopLines?.stopId === selectedStop.id ? stopLines.lines : [];
     const removeMarkers = showLiveMarkers(maplibregl, map, buses, lines);
-    if (!view.route && buses.length > 0 && framedRef.current !== selectedStop.id) {
-      framedRef.current = selectedStop.id;
+    const frameKey = view.route ? `${selectedStop.id}|${view.route}|${view.dir}` : selectedStop.id;
+    if (buses.length > 0 && framedRef.current !== frameKey) {
+      framedRef.current = frameKey;
       const { clientWidth: width, clientHeight: height } = map.getContainer();
       const visibleBottom = height * (1 - SHEET_SHARE);
       const points = [selectedStop, ...buses].map(({ lon, lat }): [number, number] => [lon, lat]);
@@ -296,12 +297,12 @@ export function TransitMap() {
     }
     const { bounds, data } = routeGeoJSON(route.route, view.dir);
     controller.setRoute(data);
-    if (bounds) {
+    if (bounds && !view.stop) {
       const height = mapRef.current?.getContainer().clientHeight ?? 0;
       const padding = { top: 80, bottom: Math.round(height * SHEET_SHARE) + 16, left: 40, right: 40 };
       mapRef.current?.fitBounds(bounds, { padding, maxZoom: STOP_ZOOM });
     }
-  }, [ready, route, view.dir]);
+  }, [ready, route, view.dir, view.stop]);
 
   function changeFavorite(stopId: string, favorite: boolean) {
     setFavorites((current) => {
