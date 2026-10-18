@@ -12,7 +12,7 @@ import { createMapController, type MapController } from "@/lib/map-controller";
 import { CLICKABLE_LAYERS, EMPTY_COLLECTION } from "@/lib/map-layers";
 import { loadFavoriteIds, loadMapStops } from "@/lib/map-stops";
 import { transitStyle } from "@/lib/map-style";
-import { mapHref, parseMapView, routeGeoJSON, type MapView } from "@/lib/map-view";
+import { mapHref, parseMapView, routeGeoJSON, SHEET_SHARE, type MapView } from "@/lib/map-view";
 import type { MapStop } from "@/lib/stops-file";
 import { strings } from "@/lib/strings";
 import { createClient } from "@/lib/supabase/client";
@@ -25,7 +25,6 @@ type LoadedRoute = { routeId: string; route: RouteDetails | null; failed: boolea
 
 const STOP_ZOOM = 16;
 const SHEET_ENTRY = "andalogoSheet";
-const SHEET_SHARE = 0.6;
 const SEARCH_HEIGHT = 72;
 
 async function loadBaseStyle(): Promise<StyleSpecification> {

@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { StarIcon } from "@/components/bottom-nav";
 import { LineBadge } from "@/components/line-badge";
 import { LineSummary } from "@/components/line-summary";
+import { SHEET_SHARE } from "@/lib/map-view";
 import { strings } from "@/lib/strings";
 import { createClient } from "@/lib/supabase/client";
 import type { StopDetails } from "@/lib/transit";
@@ -137,7 +138,8 @@ export function Sheet({ children }: { children: ReactNode }) {
   return (
     <section
       aria-live="polite"
-      className="absolute inset-x-0 bottom-0 z-20 flex max-h-[60%] flex-col rounded-t-2xl bg-white dark:bg-neutral-900 shadow-[0_-4px_16px_rgba(0,0,0,0.15)]"
+      style={{ maxHeight: `${SHEET_SHARE * 100}%` }}
+      className="absolute inset-x-0 bottom-0 z-20 flex flex-col rounded-t-2xl bg-white dark:bg-neutral-900 shadow-[0_-4px_16px_rgba(0,0,0,0.15)]"
     >
       {children}
     </section>
