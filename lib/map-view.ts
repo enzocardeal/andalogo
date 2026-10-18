@@ -5,7 +5,7 @@ export type MapView = { stop: string | null; route: string | null; dir: number }
 
 export const DEFAULT_ROUTE_COLOR = "#334155";
 
-export const SHEET_SHARE = 0.5;
+export const SHEET_SHARE = 0.45;
 
 export function mapHref(view: MapView): string {
   const params = new URLSearchParams();
