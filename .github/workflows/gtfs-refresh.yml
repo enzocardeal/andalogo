@@ -4,6 +4,11 @@ on:
   schedule:
     - cron: "0 12 * * 1"
   workflow_dispatch:
+    inputs:
+      force:
+        description: Load the feeds even when they did not change
+        type: boolean
+        default: false
 
 concurrency:
   group: gtfs-refresh
@@ -30,8 +35,8 @@ jobs:
           mkdir -p data/sptrans data/artesp
           curl -fsSL --retry 3 -o data/sptrans/gtfs.zip "https://www.sptrans.com.br/umbraco/Surface/PerfilDesenvolvedor/BaixarGTFS?memberName=sptrans"
           curl -fsSL --retry 3 -o data/artesp/gtfs.zip "$(npm run --silent artesp:url)"
-      - run: npm run gtfs:load -- --feed sptrans --zip data/sptrans/gtfs.zip
-      - run: npm run gtfs:load -- --feed artesp --zip data/artesp/gtfs.zip
+      - run: npm run gtfs:load -- --feed sptrans --zip data/sptrans/gtfs.zip ${{ inputs.force && '--force' || '' }}
+      - run: npm run gtfs:load -- --feed artesp --zip data/artesp/gtfs.zip ${{ inputs.force && '--force' || '' }}
       - name: Check the GTFS and Olho Vivo IDs
         if: env.OLHOVIVO_TOKEN != ''
         run: npm run idmap:check -- --gtfs data/sptrans/gtfs.zip
