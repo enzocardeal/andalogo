@@ -35,6 +35,24 @@ async function loadBaseStyle(): Promise<StyleSpecification> {
   return response.json();
 }
 
+function showLocationDot(maplibregl: typeof import("maplibre-gl"), map: MapLibreMap): () => void {
+  if (!("geolocation" in navigator)) {
+    return () => {};
+  }
+  const element = document.createElement("div");
+  element.className = "maplibregl-user-location-dot";
+  const marker = new maplibregl.Marker({ element });
+  const watch = navigator.geolocation.watchPosition(
+    (position) => marker.setLngLat([position.coords.longitude, position.coords.latitude]).addTo(map),
+    (error) => console.warn("location failed:", error.message),
+    { enableHighAccuracy: true },
+  );
+  return () => {
+    navigator.geolocation.clearWatch(watch);
+    marker.remove();
+  };
+}
+
 function isSheetEntry(): boolean {
   return (window.history.state as Record<string, unknown> | null)?.[SHEET_ENTRY] === true;
 }
@@ -88,6 +106,7 @@ export function TransitMap() {
       .then((ids) => !cancelled && setFavorites(new Set(ids)))
       .catch((reason: unknown) => console.error("favorites failed:", reason));
     const startsAtPlace = viewRef.current.stop !== null || viewRef.current.route !== null;
+    let stopLocationDot = () => {};
 
     Promise.all([import("maplibre-gl"), loadBaseStyle()])
       .then(([maplibregl, base]) => {
@@ -116,10 +135,13 @@ export function TransitMap() {
           positionOptions: { enableHighAccuracy: true },
           trackUserLocation: true,
         });
-        map.addControl(geolocate, "bottom-right");
+        map.addControl(geolocate, "top-right");
         map.once("load", () => {
           if (!startsAtPlace) {
             geolocate.trigger();
+          } else if (!cancelled) {
+            stopLocationDot = showLocationDot(maplibregl, map);
+            geolocate.once("trackuserlocationstart", () => stopLocationDot());
           }
         });
         stops.then(({ loaded, reason }) => {
@@ -153,6 +175,7 @@ export function TransitMap() {
 
     return () => {
       cancelled = true;
+      stopLocationDot();
       mapRef.current?.remove();
       mapRef.current = null;
       controllerRef.current = null;

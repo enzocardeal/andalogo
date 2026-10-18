@@ -10,6 +10,10 @@ body {
   overscroll-behavior: none;
 }
 
+.maplibregl-map .maplibregl-ctrl-top-right {
+  top: calc(env(safe-area-inset-top, 0px) + 3.75rem);
+}
+
 @media (prefers-color-scheme: dark) {
   .maplibregl-map .maplibregl-ctrl-group,
   .maplibregl-map .maplibregl-ctrl-attrib.maplibregl-compact {
