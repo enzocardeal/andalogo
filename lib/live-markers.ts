@@ -1,5 +1,6 @@
 import type { Map as MapLibreMap, Marker } from "maplibre-gl";
 import type { NextBus } from "./arrivals.ts";
+import { LIVE_ICON_SVG } from "./live-icon.ts";
 import { DEFAULT_ROUTE_COLOR } from "./map-view.ts";
 import { strings } from "./strings.ts";
 import type { StopLine } from "./transit.ts";
@@ -14,14 +15,6 @@ export function busLabel(bus: NextBus, line: StopLine | undefined): string {
   return `${name} · ${bus.minutes === 0 ? strings.stop.now : `${bus.minutes} min`}`;
 }
 
-function radarElement(): HTMLElement {
-  const radar = document.createElement("div");
-  radar.className = "live-radar";
-  radar.setAttribute("aria-hidden", "true");
-  radar.append(document.createElement("span"), document.createElement("span"));
-  return radar;
-}
-
 function busElement(bus: NextBus, line: StopLine | undefined): HTMLElement {
   const color = line?.color ?? DEFAULT_ROUTE_COLOR;
   const element = document.createElement("div");
@@ -31,20 +24,22 @@ function busElement(bus: NextBus, line: StopLine | undefined): HTMLElement {
   icon.style.backgroundColor = color;
   icon.style.setProperty("--glyph-window", color);
   icon.innerHTML = BUS_GLYPH;
+  const live = document.createElement("span");
+  live.className = "live-bus-signal";
+  live.innerHTML = LIVE_ICON_SVG;
   const label = document.createElement("span");
   label.textContent = busLabel(bus, line);
-  element.append(icon, label);
+  element.append(icon, live, label);
   return element;
 }
 
 export function showLiveMarkers(
   maplibregl: typeof import("maplibre-gl"),
   map: MapLibreMap,
-  stop: { lat: number; lon: number },
   buses: NextBus[],
   lines: StopLine[],
 ): () => void {
-  const markers: Marker[] = [new maplibregl.Marker({ element: radarElement() }).setLngLat([stop.lon, stop.lat]).addTo(map)];
+  const markers: Marker[] = [];
   for (const bus of buses) {
     const line = lines.find((candidate) => candidate.route_id === bus.routeId && candidate.direction_id === bus.directionId);
     markers.push(new maplibregl.Marker({ element: busElement(bus, line) }).setLngLat([bus.lon, bus.lat]).addTo(map));

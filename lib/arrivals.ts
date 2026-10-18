@@ -8,7 +8,7 @@ export type LiveLine = { routeId: string; directionId: number; vehicles: LiveVeh
 
 export type Arrivals = { state: ArrivalState; lines: LiveLine[] };
 
-export const MAX_VEHICLES = 4;
+export const MAX_VEHICLES = 3;
 
 const STALE_MINUTES = 5;
 const MINUTES_PER_DAY = 1440;

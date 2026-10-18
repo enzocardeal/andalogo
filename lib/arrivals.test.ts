@@ -40,7 +40,7 @@ test("minutesUntil handles midnight and late forecasts", () => {
   assert.equal(minutesUntil("09:59", "10:00"), 0);
 });
 
-test("toArrivals keeps up to four fresh vehicles per line, soonest first", () => {
+test("toArrivals keeps up to three fresh vehicles per line, soonest first", () => {
   const arrivals = toArrivals(
     prediction("10:00", [
       { c: "8000-10", sl: 2, vs: [vehicle("10:20"), vehicle("10:03", FRESH, false), vehicle("10:09"), vehicle("10:12"), vehicle("10:30"), vehicle("10:01", OLD)] },
@@ -58,7 +58,6 @@ test("toArrivals keeps up to four fresh vehicles per line, soonest first", () =>
           { minutes: 3, accessible: false, ...AT },
           { minutes: 9, accessible: true, ...AT },
           { minutes: 12, accessible: true, ...AT },
-          { minutes: 20, accessible: true, ...AT },
         ],
       },
       { routeId: "sp:1012-10", directionId: 0, vehicles: [] },

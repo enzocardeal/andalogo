@@ -64,39 +64,6 @@ body {
   }
 }
 
-.live-radar {
-  position: relative;
-  width: 14px;
-  height: 14px;
-  border-radius: 9999px;
-  background: #16a34a;
-  box-shadow: 0 0 0 2px #ffffff;
-  pointer-events: none;
-}
-
-.live-radar span {
-  position: absolute;
-  inset: 0;
-  border: 2px solid #16a34a;
-  border-radius: 9999px;
-  animation: live-radar 2s ease-out infinite;
-}
-
-.live-radar span:last-child {
-  animation-delay: 1s;
-}
-
-@keyframes live-radar {
-  from {
-    transform: scale(1);
-    opacity: 0.8;
-  }
-  to {
-    transform: scale(4);
-    opacity: 0;
-  }
-}
-
 .live-bus {
   display: flex;
   align-items: center;
@@ -111,6 +78,12 @@ body {
   pointer-events: none;
 }
 
+.live-bus-signal {
+  width: 12px;
+  height: 12px;
+  color: #16a34a;
+}
+
 .live-bus-icon {
   display: grid;
   place-items: center;
@@ -120,18 +93,7 @@ body {
   color: #ffffff;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .live-radar span {
-    animation: none;
-    opacity: 0;
-  }
-}
-
 @media (prefers-color-scheme: dark) {
-  .live-radar {
-    box-shadow: 0 0 0 2px #171717;
-  }
-
   .live-bus {
     background: #171717;
     color: #f5f5f5;

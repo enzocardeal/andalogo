@@ -149,6 +149,7 @@ export function TransitMap() {
         map.on("rotate", markNorth);
         markNorth();
         map.once("load", () => {
+          map.getContainer().querySelector(".maplibregl-ctrl-attrib")?.classList.remove("maplibregl-compact-show");
           if (!startsAtPlace) {
             geolocate.trigger();
           } else if (!cancelled) {
@@ -237,7 +238,7 @@ export function TransitMap() {
     }
     const buses = nextBuses(arrivals, NEXT_BUSES);
     const lines = stopLines?.stopId === selectedStop.id ? stopLines.lines : [];
-    const removeMarkers = showLiveMarkers(maplibregl, map, selectedStop, buses, lines);
+    const removeMarkers = showLiveMarkers(maplibregl, map, buses, lines);
     if (buses.length > 0 && framedRef.current !== selectedStop.id) {
       framedRef.current = selectedStop.id;
       const { clientWidth: width, clientHeight: height } = map.getContainer();
@@ -251,7 +252,7 @@ export function TransitMap() {
         const lons = points.map(([lon]) => lon);
         const lats = points.map(([, lat]) => lat);
         map.fitBounds([Math.min(...lons), Math.min(...lats), Math.max(...lons), Math.max(...lats)], {
-          padding: { top: SEARCH_HEIGHT + 24, bottom: height - visibleBottom + 24, left: 96, right: 96 },
+          padding: { top: SEARCH_HEIGHT + 24, bottom: height - visibleBottom + 60, left: 96, right: 96 },
           maxZoom: STOP_ZOOM,
         });
       }

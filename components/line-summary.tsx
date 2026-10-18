@@ -1,5 +1,6 @@
 import type { LiveLine } from "@/lib/arrivals";
 import { lineTimes } from "@/lib/headway";
+import { LIVE_ICON_SVG } from "@/lib/live-icon";
 import type { StopLine } from "@/lib/transit";
 
 export function LineSummary({ line, now, live = null }: { line: StopLine; now: Date; live?: LiveLine | null }) {
@@ -8,11 +9,19 @@ export function LineSummary({ line, now, live = null }: { line: StopLine; now: D
     <>
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate">{line.headsign || line.long_name}</span>
-        {times.next && <span className="truncate text-xs text-neutral-500 dark:text-neutral-400 tabular-nums">{times.next}</span>}
+        {times.next && (
+          <span
+            className={`truncate text-xs tabular-nums ${
+              times.live ? "text-green-700 dark:text-green-400" : "text-neutral-500 dark:text-neutral-400"
+            }`}
+          >
+            {times.next}
+          </span>
+        )}
       </span>
       {times.live ? (
-        <span className="flex shrink-0 items-center gap-1.5 text-sm font-semibold text-green-700 tabular-nums dark:text-green-400">
-          <span aria-hidden="true" className="size-2 rounded-full bg-current motion-safe:animate-pulse" />
+        <span className="flex shrink-0 items-center gap-1 rounded-md border border-green-600/50 px-1.5 py-0.5 text-sm font-semibold text-green-700 tabular-nums dark:border-green-400/50 dark:text-green-400">
+          <span className="size-3.5" dangerouslySetInnerHTML={{ __html: LIVE_ICON_SVG }} />
           {times.main}
         </span>
       ) : (
