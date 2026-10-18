@@ -4,6 +4,7 @@ import { parseArgs } from "node:util";
 import postgres from "postgres";
 import { buildFeed } from "../lib/gtfs/build.ts";
 import { activeSha256, replaceFeed } from "../lib/gtfs/db.ts";
+import { readShapes } from "../lib/gtfs/shapes.ts";
 import { readAll } from "../lib/gtfs/zip.ts";
 import { encodeStops, STOPS_BUCKET } from "../lib/stops-file.ts";
 import { createAdminClient } from "../lib/supabase/admin.ts";
@@ -32,17 +33,21 @@ try {
   if (!values.force && (await activeSha256(sql, feed)) === sha256) {
     console.log(`${feed}: the active version already has sha256 ${sha256}. Use --force to load it again.`);
   } else {
+    const trips = await readAll(zip, "trips.txt");
     const tables = buildFeed(feed, {
       stops: await readAll(zip, "stops.txt"),
       routes: await readAll(zip, "routes.txt"),
-      trips: await readAll(zip, "trips.txt"),
+      trips,
       stopTimes: await readAll(zip, "stop_times.txt"),
       frequencies: await readAll(zip, "frequencies.txt"),
       calendar: await readAll(zip, "calendar.txt"),
+      shapes: await readShapes(zip, new Set(trips.map((trip) => trip.shape_id).filter(Boolean))),
     });
+    const polylineMB = tables.patterns.reduce((sum, pattern) => sum + pattern.polyline.length, 0) / 1e6;
     console.log(
       `${feed}: ${tables.stops.length} stops, ${tables.routes.length} routes, ` +
-        `${tables.stopRoutes.length} stop routes, ${tables.headways.length} headways`,
+        `${tables.stopRoutes.length} stop routes, ${tables.headways.length} headways, ` +
+        `${tables.patterns.length} patterns (${polylineMB.toFixed(1)} MB of polylines)`,
     );
 
     const storage = createAdminClient().storage;

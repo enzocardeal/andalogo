@@ -1,29 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { StarIcon } from "@/components/bottom-nav";
+import { LineBadge } from "@/components/line-badge";
 import { headwayLabel } from "@/lib/headway";
 import { strings } from "@/lib/strings";
 import { createClient } from "@/lib/supabase/client";
-import type { Mode } from "@/lib/transit";
+import type { StopDetails } from "@/lib/transit";
 
-type StopLine = {
-  route_id: string;
-  short_name: string;
-  long_name: string;
-  mode: Mode;
-  color: string | null;
-  text_color: string | null;
-  direction_id: number;
-  headsign: string;
-  headway_s: number | null;
+type Loaded = { stopId: string; stop: StopDetails | null; failed: boolean };
+
+type StopSheetProps = {
+  stopId: string;
+  onClose: () => void;
+  onRoute: (routeId: string, dir: number) => void;
 };
 
-type Stop = { id: string; name: string; mode: Mode; lines: StopLine[] };
-
-type Loaded = { stopId: string; stop: Stop | null; failed: boolean };
-
-export function StopSheet({ stopId, onClose }: { stopId: string; onClose: () => void }) {
+export function StopSheet({ stopId, onClose, onRoute }: StopSheetProps) {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
+  const [favoriteFailed, setFavoriteFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -34,7 +29,8 @@ export function StopSheet({ stopId, onClose }: { stopId: string; onClose: () => 
           console.error("get_stop failed:", error.message);
         }
         if (!cancelled) {
-          setLoaded({ stopId, stop: (data as Stop | null) ?? null, failed: error !== null });
+          setLoaded({ stopId, stop: (data as StopDetails | null) ?? null, failed: error !== null });
+          setFavoriteFailed(false);
         }
       });
     return () => {
@@ -43,38 +39,66 @@ export function StopSheet({ stopId, onClose }: { stopId: string; onClose: () => 
   }, [stopId]);
 
   const current = loaded?.stopId === stopId ? loaded : null;
+  const stop = current?.stop ?? null;
+
+  async function toggleFavorite() {
+    if (!stop) {
+      return;
+    }
+    const favorite = !stop.favorite;
+    setLoaded({ stopId, stop: { ...stop, favorite }, failed: false });
+    setFavoriteFailed(false);
+    const { error } = await createClient().rpc(favorite ? "add_favorite" : "remove_favorite", {
+      p_stop_id: stop.id,
+    });
+    if (error) {
+      console.error("favorite failed:", error.message);
+      setLoaded({ stopId, stop, failed: false });
+      setFavoriteFailed(true);
+    }
+  }
 
   return (
-    <section
-      aria-live="polite"
-      className="absolute inset-x-0 bottom-0 flex max-h-[60dvh] flex-col rounded-t-2xl bg-white shadow-[0_-4px_16px_rgba(0,0,0,0.15)]"
-    >
-      <header className="flex items-start justify-between gap-4 px-4 pt-4 pb-2">
+    <Sheet>
+      <header className="flex items-start justify-between gap-2 px-4 pt-4 pb-2">
         <div className="flex min-w-0 flex-col">
-          <h2 className="text-lg font-semibold">{current?.stop?.name ?? strings.loading}</h2>
-          {current?.stop && (
+          <h2 className="text-lg font-semibold">{stop?.name ?? strings.loading}</h2>
+          {stop && (
             <p className="text-sm text-neutral-500">
-              {strings.modes[current.stop.mode]} · {strings.stop.scheduled}
+              {strings.modes[stop.mode]} · {strings.stop.scheduled}
             </p>
           )}
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label={strings.stop.close}
-          className="flex size-11 shrink-0 items-center justify-center rounded-full text-2xl text-neutral-500"
-        >
-          ×
-        </button>
+        <div className="flex shrink-0">
+          {stop && (
+            <button
+              type="button"
+              onClick={toggleFavorite}
+              aria-pressed={stop.favorite}
+              aria-label={stop.favorite ? strings.stop.removeFavorite : strings.stop.addFavorite}
+              className={`flex size-11 items-center justify-center rounded-full ${
+                stop.favorite ? "text-amber-500" : "text-neutral-500"
+              }`}
+            >
+              <StarIcon filled={stop.favorite} />
+            </button>
+          )}
+          <CloseButton label={strings.stop.close} onClick={onClose} />
+        </div>
       </header>
-      <div className="overflow-y-auto px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)]">
-        <StopBody loaded={current} />
+      <div className="overflow-y-auto px-4 pb-4">
+        {favoriteFailed && (
+          <p role="alert" className="mb-2 text-sm text-red-700">
+            {strings.stop.favoriteFailed}
+          </p>
+        )}
+        <StopBody loaded={current} onRoute={onRoute} />
       </div>
-    </section>
+    </Sheet>
   );
 }
 
-function StopBody({ loaded }: { loaded: Loaded | null }) {
+function StopBody({ loaded, onRoute }: { loaded: Loaded | null; onRoute: StopSheetProps["onRoute"] }) {
   if (!loaded) {
     return null;
   }
@@ -90,21 +114,47 @@ function StopBody({ loaded }: { loaded: Loaded | null }) {
   return (
     <ul className="flex flex-col divide-y divide-neutral-100">
       {loaded.stop.lines.map((line) => (
-        <li key={`${line.route_id}:${line.direction_id}`} className="flex min-h-14 items-center gap-3 py-2">
-          <span
-            className="shrink-0 rounded px-2 py-1 text-sm font-semibold tabular-nums"
-            style={{ backgroundColor: line.color ?? "#334155", color: line.text_color ?? "#ffffff" }}
+        <li key={`${line.route_id}:${line.direction_id}`}>
+          <button
+            type="button"
+            onClick={() => onRoute(line.route_id, line.direction_id)}
+            aria-label={`${line.short_name} ${line.headsign}. ${strings.stop.showRoute}`}
+            className="flex min-h-14 w-full items-center gap-3 py-2 text-left"
           >
-            {line.short_name}
-          </span>
-          <span className="min-w-0 flex-1 truncate">{line.headsign || line.long_name}</span>
-          <span
-            className={`shrink-0 text-sm tabular-nums ${line.headway_s === null ? "text-neutral-400" : "text-neutral-700"}`}
-          >
-            {headwayLabel(line.headway_s)}
-          </span>
+            <LineBadge line={line} />
+            <span className="min-w-0 flex-1 truncate">{line.headsign || line.long_name}</span>
+            <span
+              className={`shrink-0 text-sm tabular-nums ${line.headway_s === null ? "text-neutral-400" : "text-neutral-700"}`}
+            >
+              {headwayLabel(line.headway_s)}
+            </span>
+          </button>
         </li>
       ))}
     </ul>
+  );
+}
+
+export function Sheet({ children }: { children: ReactNode }) {
+  return (
+    <section
+      aria-live="polite"
+      className="absolute inset-x-0 bottom-0 z-20 flex max-h-[60%] flex-col rounded-t-2xl bg-white shadow-[0_-4px_16px_rgba(0,0,0,0.15)]"
+    >
+      {children}
+    </section>
+  );
+}
+
+export function CloseButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      className="flex size-11 shrink-0 items-center justify-center rounded-full text-2xl text-neutral-500"
+    >
+      ×
+    </button>
   );
 }

@@ -6,7 +6,7 @@ Stack: Next.js on Vercel (`gru1`), Supabase (`sa-east-1`), MapLibre GL JS with O
 
 ## Status
 
-Milestone M1: all SPTrans bus stops and Metrô and CPTM stations on the map. A tap on a stop shows its lines and the scheduled frequency now.
+Milestones M0, M1, M3 and M4: Google login with invite, all SPTrans stops and stations on the map with the scheduled frequency per line, favorite stops as the start screen, line routes, and search. M2 (live arrivals) waits for the Olho Vivo token.
 
 | Milestone | Content |
 |---|---|

@@ -98,3 +98,37 @@ export function stopLayers(): LayerSpecification[] {
     },
   ];
 }
+
+export const ROUTE_SOURCE = "route";
+export const ROUTE_STOPS_LAYER = "route-stops";
+
+export function routeLayers(): { layer: LayerSpecification; before: string }[] {
+  return [
+    {
+      before: "bus-stops",
+      layer: {
+        id: "route-line",
+        type: "line",
+        source: ROUTE_SOURCE,
+        filter: ["==", ["geometry-type"], "LineString"],
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: { "line-color": ["get", "color"], "line-width": 5, "line-opacity": 0.85 },
+      },
+    },
+    {
+      before: SELECTED_LAYER,
+      layer: {
+        id: ROUTE_STOPS_LAYER,
+        type: "circle",
+        source: ROUTE_SOURCE,
+        filter: ["==", ["geometry-type"], "Point"],
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 3, 15, 6],
+          "circle-color": "#ffffff",
+          "circle-stroke-width": 2.5,
+          "circle-stroke-color": ["get", "color"],
+        },
+      },
+    },
+  ];
+}

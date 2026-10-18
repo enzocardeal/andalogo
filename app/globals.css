@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+:root {
+  --bottom-nav-height: 3.5rem;
+}
+
 @layer base {
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),

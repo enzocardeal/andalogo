@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { BottomNav } from "@/components/bottom-nav";
 import { strings } from "@/lib/strings";
 import "./globals.css";
 
@@ -19,7 +20,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="pt-BR">
-      <body className="flex min-h-dvh flex-col bg-white text-neutral-900 antialiased">{children}</body>
+      <body className="flex min-h-dvh flex-col bg-white text-neutral-900 antialiased">
+        {children}
+        <BottomNav />
+      </body>
     </html>
   );
 }

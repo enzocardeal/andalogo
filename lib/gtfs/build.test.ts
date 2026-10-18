@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { decodePolyline } from "../polyline.ts";
 import { buildFeed, dayTypesOf, minutesOf, modeOf, type FeedInput } from "./build.ts";
 
 function service(id: string, days: string): Record<string, string> {
@@ -14,10 +15,12 @@ const INPUT: FeedInput = {
     { route_id: "FUN", route_short_name: "FUN", route_long_name: "Funicular", route_type: "7", route_color: "", route_text_color: "" },
   ],
   trips: [
-    { route_id: "1012-10", service_id: "USD", trip_id: "bus-0", trip_headsign: "Jd. B", direction_id: "0" },
-    { route_id: "1012-10", service_id: "USD", trip_id: "bus-1", trip_headsign: "Term. A", direction_id: "1" },
-    { route_id: "METRÔ L1", service_id: "U__", trip_id: "l1-0", trip_headsign: "Jabaquara", direction_id: "0" },
-    { route_id: "FUN", service_id: "USD", trip_id: "fun-0", trip_headsign: "Topo", direction_id: "0" },
+    { route_id: "1012-10", service_id: "USD", trip_id: "bus-0", trip_headsign: "Jd. B", direction_id: "0", shape_id: "s-bus" },
+    { route_id: "1012-10", service_id: "USD", trip_id: "bus-1", trip_headsign: "Term. A", direction_id: "1", shape_id: "" },
+    { route_id: "METRÔ L1", service_id: "U__", trip_id: "l1-0", trip_headsign: "Jabaquara", direction_id: "0", shape_id: "s-l1" },
+    { route_id: "FUN", service_id: "USD", trip_id: "fun-0", trip_headsign: "Topo", direction_id: "0", shape_id: "" },
+    { route_id: "1012-10", service_id: "USD", trip_id: "bus-0-short", trip_headsign: "Sé", direction_id: "0", shape_id: "" },
+    { route_id: "1012-10", service_id: "USD", trip_id: "bus-0-late", trip_headsign: "Jd. B", direction_id: "0", shape_id: "" },
   ],
   stops: [
     { stop_id: "1", stop_name: "Rua A, 10", stop_lat: "-23.5", stop_lon: "-46.6" },
@@ -26,11 +29,14 @@ const INPUT: FeedInput = {
     { stop_id: "4", stop_name: "Funicular", stop_lat: "-23.7", stop_lon: "-46.8" },
   ],
   stopTimes: [
-    { trip_id: "bus-0", stop_id: "1" },
-    { trip_id: "bus-0", stop_id: "2" },
-    { trip_id: "bus-1", stop_id: "1" },
-    { trip_id: "l1-0", stop_id: "2" },
-    { trip_id: "fun-0", stop_id: "4" },
+    { trip_id: "bus-0", stop_id: "1", stop_sequence: "1" },
+    { trip_id: "bus-0", stop_id: "2", stop_sequence: "2" },
+    { trip_id: "bus-1", stop_id: "1", stop_sequence: "1" },
+    { trip_id: "l1-0", stop_id: "2", stop_sequence: "1" },
+    { trip_id: "fun-0", stop_id: "4", stop_sequence: "1" },
+    { trip_id: "bus-0-short", stop_id: "2", stop_sequence: "1" },
+    { trip_id: "bus-0-late", stop_id: "2", stop_sequence: "20" },
+    { trip_id: "bus-0-late", stop_id: "1", stop_sequence: "10" },
   ],
   frequencies: [
     { trip_id: "bus-0", start_time: "01:00:00", end_time: "01:59:00", headway_secs: "3600" },
@@ -39,6 +45,10 @@ const INPUT: FeedInput = {
     { trip_id: "l1-0", start_time: "07:00:00", end_time: "24:30:00", headway_secs: "240" },
   ],
   calendar: [service("USD", "1111111"), service("U__", "1111100")],
+  shapes: new Map([
+    ["s-bus", [[-23.5, -46.6], [-23.52, -46.61], [-23.55, -46.63]]],
+    ["s-l1", [[-23.55, -46.63]]],
+  ]),
 };
 
 test("modeOf maps route_type per feed", () => {
@@ -112,5 +122,23 @@ test("buildFeed turns frequency windows into half-open minute ranges per day typ
     "sp:1012-10 sunday 60-120 3600",
     "sp:METRÔ L1 weekday 360-420 180",
     "sp:METRÔ L1 weekday 420-1471 240",
+  ]);
+});
+
+test("buildFeed keeps the most common stop sequence per route and direction, with its shape", () => {
+  const patterns = buildFeed("sptrans", INPUT).patterns.map((pattern) => ({
+    ...pattern,
+    polyline: decodePolyline(pattern.polyline),
+  }));
+  assert.deepEqual(patterns, [
+    {
+      route_id: "sp:1012-10",
+      direction_id: 0,
+      headsign: "Jd. B",
+      polyline: [[-23.5, -46.6], [-23.52, -46.61], [-23.55, -46.63]],
+      stop_ids: ["sp:1", "sp:2"],
+    },
+    { route_id: "sp:1012-10", direction_id: 1, headsign: "Term. A", polyline: [[-23.5, -46.6]], stop_ids: ["sp:1"] },
+    { route_id: "sp:METRÔ L1", direction_id: 0, headsign: "Jabaquara", polyline: [[-23.55, -46.63]], stop_ids: ["sp:2"] },
   ]);
 });

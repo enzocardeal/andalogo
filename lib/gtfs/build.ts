@@ -1,5 +1,7 @@
+import { encodePolyline, type LatLon } from "../polyline.ts";
 import type { MapStop } from "../stops-file.ts";
 import { FEED_PREFIX, RAIL_MODES, type Feed, type Mode } from "../transit.ts";
+import { simplify } from "./simplify.ts";
 import type { Row } from "./zip.ts";
 
 export type DayType = "weekday" | "saturday" | "sunday";
@@ -27,11 +29,20 @@ export type HeadwayRow = {
   headway_s: number;
 };
 
+export type RoutePatternRow = {
+  route_id: string;
+  direction_id: number;
+  headsign: string;
+  polyline: string;
+  stop_ids: string[];
+};
+
 export type FeedTables = {
   stops: StopRow[];
   routes: RouteRow[];
   stopRoutes: StopRouteRow[];
   headways: HeadwayRow[];
+  patterns: RoutePatternRow[];
 };
 
 export type FeedInput = {
@@ -41,9 +52,12 @@ export type FeedInput = {
   stopTimes: Row[];
   frequencies: Row[];
   calendar: Row[];
+  shapes: Map<string, LatLon[]>;
 };
 
-type Trip = { routeId: string; directionId: number; headsign: string; serviceId: string };
+type Trip = { routeId: string; directionId: number; headsign: string; serviceId: string; shapeId: string };
+
+const SHAPE_TOLERANCE_M = 5;
 
 const MODE_PRIORITY: readonly Mode[] = ["metro", "cptm", "emtu", "bus"];
 const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday"];
@@ -115,17 +129,25 @@ export function buildFeed(feed: Feed, input: FeedInput): FeedTables {
         directionId: Number(row.direction_id || 0),
         headsign: row.trip_headsign ?? "",
         serviceId: row.service_id,
+        shapeId: row.shape_id ?? "",
       });
     }
   }
 
   const stopRoutes = new Map<string, StopRouteRow>();
   const stopModes = new Map<string, { mode: Mode; color: string | null }>();
+  const tripStops = new Map<string, [number, string][]>();
   for (const row of input.stopTimes) {
     const trip = trips.get(row.trip_id);
     if (!trip) {
       continue;
     }
+    let sequence = tripStops.get(row.trip_id);
+    if (!sequence) {
+      sequence = [];
+      tripStops.set(row.trip_id, sequence);
+    }
+    sequence.push([Number(row.stop_sequence), row.stop_id]);
     const route = routes.get(trip.routeId)!;
     const key = `${row.stop_id}|${trip.routeId}|${trip.directionId}`;
     if (!stopRoutes.has(key)) {
@@ -191,5 +213,43 @@ export function buildFeed(feed: Feed, input: FeedInput): FeedTables {
     });
   }
 
-  return { stops, routes: [...routes.values()], stopRoutes: [...stopRoutes.values()], headways };
+  const coordinates = new Map(stops.map((stop): [string, LatLon] => [stop.gtfs_stop_id, [stop.lat, stop.lon]]));
+  const patterns = buildPatterns(trips, tripStops).map(({ tripId, stopIds }): RoutePatternRow => {
+    const trip = trips.get(tripId)!;
+    const shape = input.shapes.get(trip.shapeId);
+    const line = shape && shape.length >= 2 ? shape : stopIds.map((id) => coordinates.get(id)!);
+    return {
+      route_id: routes.get(trip.routeId)!.id,
+      direction_id: trip.directionId,
+      headsign: trip.headsign,
+      polyline: encodePolyline(simplify(line, SHAPE_TOLERANCE_M)),
+      stop_ids: stopIds.map(idOf),
+    };
+  });
+
+  return { stops, routes: [...routes.values()], stopRoutes: [...stopRoutes.values()], headways, patterns };
+}
+
+function buildPatterns(trips: Map<string, Trip>, tripStops: Map<string, [number, string][]>) {
+  const candidates = new Map<string, Map<string, { tripId: string; stopIds: string[]; count: number }>>();
+  for (const [tripId, sequence] of tripStops) {
+    const trip = trips.get(tripId)!;
+    const stopIds = sequence.toSorted((a, b) => a[0] - b[0]).map(([, stopId]) => stopId);
+    const key = `${trip.routeId}|${trip.directionId}`;
+    const signature = stopIds.join(">");
+    let byRoute = candidates.get(key);
+    if (!byRoute) {
+      byRoute = new Map();
+      candidates.set(key, byRoute);
+    }
+    const seen = byRoute.get(signature);
+    if (seen) {
+      seen.count++;
+    } else {
+      byRoute.set(signature, { tripId, stopIds, count: 1 });
+    }
+  }
+  return [...candidates.values()].map((byRoute) =>
+    [...byRoute.values()].reduce((best, candidate) => (candidate.count > best.count ? candidate : best)),
+  );
 }

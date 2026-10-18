@@ -7,6 +7,7 @@ import postgres from "postgres";
 import { buildFeed } from "../lib/gtfs/build.ts";
 import { activeSha256, replaceFeed } from "../lib/gtfs/db.ts";
 import { loginErrorFor } from "../lib/login-error.ts";
+import { decodePolyline } from "../lib/polyline.ts";
 
 type Stack = { API_URL: string; ANON_KEY: string; SERVICE_ROLE_KEY: string; DB_URL: string };
 type User = { id: string; email: string; client: SupabaseClient };
@@ -20,6 +21,7 @@ const REFERENCE_TABLES: Record<string, string> = {
   stops: "id",
   stop_routes: "stop_id",
   headways: "route_id",
+  route_patterns: "route_id",
 };
 
 const stack: Stack = JSON.parse(
@@ -34,8 +36,10 @@ const sql = postgres(stack.DB_URL, { max: 1, onnotice: () => {} });
 const stopId = `sp:rls-${run}`;
 const busId = `sp:rls-bus-${run}`;
 const nightId = `sp:rls-night-${run}`;
+const squareId = `sp:rls-square-${run}`;
 
 let member: User;
+let other: User;
 
 function newClient(key: string): SupabaseClient {
   return createClient(stack.API_URL, key, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -77,16 +81,21 @@ async function inviteCount(): Promise<number> {
 }
 
 before(async () => {
-  ok(await admin.from("invited_emails").insert({ email: emailFor("member") }), "invite");
+  ok(await admin.from("invited_emails").insert([{ email: emailFor("member") }, { email: emailFor("other") }]), "invite");
   member = await signUp("member");
+  other = await signUp("other");
 
   await sql`
     insert into public.routes (id, feed, short_name, long_name, mode, color, text_color) values
-      (${busId}, 'sptrans', 'RLS-10', 'Term. A - B', 'bus', '#509E2F', '#FFFFFF'),
+      (${busId}, 'sptrans', ${`R${run}`}, 'Term. A - B', 'bus', '#509E2F', '#FFFFFF'),
       (${nightId}, 'sptrans', 'RLS-21', 'Term. A - C', 'bus', null, null)`;
   await sql`
-    insert into public.stops (id, feed, gtfs_stop_id, name, lat, lon, mode, color)
-    values (${stopId}, 'sptrans', ${`rls-${run}`}, 'Parada RLS', -23.55, -46.63, 'bus', null)`;
+    insert into public.stops (id, feed, gtfs_stop_id, name, lat, lon, mode, color) values
+      (${stopId}, 'sptrans', ${`rls-${run}`}, 'Parada RLS', -23.55, -46.63, 'bus', null),
+      (${squareId}, 'sptrans', ${`rls-square-${run}`}, ${`Praça da Sé ${run}`}, -23.5505, -46.6333, 'metro', '#EE372F')`;
+  await sql`
+    insert into public.route_patterns (route_id, direction_id, headsign, polyline, stop_ids)
+    values (${busId}, 0, 'Jd. B', '_p~iF~ps|U', ${sql.array([squareId, stopId])})`;
   await sql`
     insert into public.stop_routes (stop_id, route_id, direction_id, headsign) values
       (${stopId}, ${busId}, 0, 'Jd. B'),
@@ -98,7 +107,7 @@ before(async () => {
 });
 
 after(async () => {
-  await sql`delete from public.stops where id = ${stopId}`;
+  await sql`delete from public.stops where id in ${sql([stopId, squareId])}`;
   await sql`delete from public.routes where id in ${sql([busId, nightId])}`;
   await sql.end();
   const { users } = ok(await admin.auth.admin.listUsers({ perPage: 1000 }), "list users");
@@ -208,11 +217,12 @@ test("replaceFeed loads a feed and replaces it on the next load", async (t) => {
   const tables = (headsign: string) =>
     buildFeed("artesp", {
       routes: [{ route_id: "001", route_short_name: "001", route_long_name: "A - B", route_type: "3" }],
-      trips: [{ route_id: "001", service_id: "WD", trip_id: "t1", trip_headsign: headsign, direction_id: "1" }],
+      trips: [{ route_id: "001", service_id: "WD", trip_id: "t1", trip_headsign: headsign, direction_id: "1", shape_id: "sh1" }],
       stops: [{ stop_id: "9", stop_name: "Rua B, 1", stop_lat: "-23.6", stop_lon: "-46.5" }],
-      stopTimes: [{ trip_id: "t1", stop_id: "9" }],
+      stopTimes: [{ trip_id: "t1", stop_id: "9", stop_sequence: "1" }],
       frequencies: [{ trip_id: "t1", start_time: "05:00:00", end_time: "22:59:00", headway_secs: "900" }],
       calendar: [{ service_id: "WD", ...week }],
+      shapes: new Map([["sh1", [[-23.6, -46.5], [-23.61, -46.51]]]]),
     });
 
   try {
@@ -227,6 +237,7 @@ test("replaceFeed loads a feed and replaces it on the next load", async (t) => {
       mode: "emtu",
       lat: -23.6,
       lon: -46.5,
+      favorite: false,
       lines: [
         {
           route_id: "ar:001",
@@ -241,9 +252,111 @@ test("replaceFeed loads a feed and replaces it on the next load", async (t) => {
         },
       ],
     });
+    const route = ok(await member.client.rpc("get_route", { p_route_id: "ar:001" }), "get_route") as {
+      patterns: { direction_id: number; headsign: string; polyline: string; stops: { id: string }[] }[];
+    };
+    assert.deepEqual(
+      route.patterns.map(({ direction_id, headsign, polyline, stops }) => ({
+        direction_id,
+        headsign,
+        polyline: decodePolyline(polyline),
+        stops: stops.map((stop) => stop.id),
+      })),
+      [{ direction_id: 1, headsign: "Bairro B", polyline: [[-23.6, -46.5], [-23.61, -46.51]], stops: ["ar:9"] }],
+    );
   } finally {
     await sql`delete from public.stops where feed = 'artesp'`;
     await sql`delete from public.routes where feed = 'artesp'`;
     await sql`delete from public.feed_versions where feed = 'artesp'`;
+  }
+});
+
+type FavoriteRow = { stop_id: string; stop: { id: string; favorite: boolean } | null };
+
+async function favoritesOf(user: User): Promise<string[]> {
+  const rows = ok(await user.client.rpc("get_favorites"), "get_favorites") as FavoriteRow[];
+  return rows.map((row) => row.stop_id);
+}
+
+test("favorites keep their order and belong only to their user", async () => {
+  ok(await member.client.rpc("add_favorite", { p_stop_id: stopId }), "add first");
+  ok(await member.client.rpc("add_favorite", { p_stop_id: squareId }), "add second");
+  ok(await member.client.rpc("add_favorite", { p_stop_id: stopId }), "add again");
+  assert.deepEqual(await favoritesOf(member), [stopId, squareId]);
+
+  const rows = ok(await member.client.rpc("get_favorites"), "get_favorites") as FavoriteRow[];
+  assert.deepEqual(rows.map((row) => [row.stop?.id, row.stop?.favorite]), [[stopId, true], [squareId, true]]);
+
+  assert.deepEqual(await favoritesOf(other), []);
+  assert.deepEqual(ok(await other.client.from("favorites").select("stop_id"), "other select favorites"), []);
+  const seenByOther = ok(await other.client.rpc("get_stop", { p_stop_id: stopId }), "other get_stop") as FavoriteRow["stop"];
+  assert.equal(seenByOther?.favorite, false);
+
+  ok(await member.client.rpc("reorder_favorites", { p_stop_ids: [squareId, stopId] }), "reorder");
+  assert.deepEqual(await favoritesOf(member), [squareId, stopId]);
+
+  ok(await other.client.rpc("remove_favorite", { p_stop_id: stopId }), "other remove");
+  assert.deepEqual(await favoritesOf(member), [squareId, stopId]);
+  ok(await member.client.rpc("remove_favorite", { p_stop_id: stopId }), "remove");
+  assert.deepEqual(await favoritesOf(member), [squareId]);
+});
+
+test("favorite RPCs refuse an unknown stop and an incomplete order", async () => {
+  refused(await member.client.rpc("add_favorite", { p_stop_id: "sp:none" }), "AL002", /unknown stop/, "unknown stop");
+  const current = await favoritesOf(member);
+  refused(await member.client.rpc("reorder_favorites", { p_stop_ids: [] }), "AL004", /every favorite once/, "empty order");
+  const doubled = [...current, ...current];
+  refused(await member.client.rpc("reorder_favorites", { p_stop_ids: doubled }), "AL004", /every favorite once/, "doubled order");
+  assert.deepEqual(await favoritesOf(member), current);
+});
+
+test("nobody writes favorites directly", async () => {
+  for (const [role, client] of [["anon", anon], ["member", member.client]] as const) {
+    const table = () => client.from("favorites");
+    refused(await table().insert({ user_id: member.id, stop_id: stopId, position: 9 }), "42501", DENIED, `${role} insert`);
+    refused(await table().update({ position: 9 }).eq("user_id", member.id), "42501", DENIED, `${role} update`);
+    refused(await table().delete().eq("user_id", member.id), "42501", DENIED, `${role} delete`);
+  }
+  refused(await anon.from("favorites").select("stop_id"), "42501", DENIED, "anon select");
+});
+
+test("get_route returns the pattern stops in order", async () => {
+  const route = ok(await member.client.rpc("get_route", { p_route_id: busId }), "get_route") as {
+    short_name: string;
+    patterns: { headsign: string; stops: { id: string; name: string }[] }[];
+  };
+  assert.equal(route.short_name, `R${run}`);
+  assert.deepEqual(
+    route.patterns.map((pattern) => [pattern.headsign, pattern.stops.map((stop) => stop.id)]),
+    [["Jd. B", [squareId, stopId]]],
+  );
+  assert.equal(ok(await member.client.rpc("get_route", { p_route_id: "sp:none" }), "unknown route"), null);
+});
+
+test("search finds lines by sign and stops by name, without accents", async () => {
+  type Found = { routes: { id: string }[]; stops: { id: string }[] };
+  const byLine = ok(await member.client.rpc("search", { p_query: `r${run}` }), "search line") as Found;
+  assert.deepEqual(byLine.routes.map((route) => route.id), [busId]);
+
+  const byStop = ok(await member.client.rpc("search", { p_query: `PRACA DA SE ${run}` }), "search stop") as Found;
+  assert.deepEqual(byStop.stops.map((stop) => stop.id), [squareId]);
+
+  const short = ok(await member.client.rpc("search", { p_query: "s" }), "short query") as Found;
+  assert.deepEqual(short, { routes: [], stops: [] });
+  const wildcard = ok(await member.client.rpc("search", { p_query: "%%" }), "wildcard query") as Found;
+  assert.deepEqual(wildcard, { routes: [], stops: [] });
+});
+
+test("anon cannot execute the favorite, route or search RPCs", async () => {
+  const calls: [string, Record<string, unknown>][] = [
+    ["add_favorite", { p_stop_id: stopId }],
+    ["remove_favorite", { p_stop_id: stopId }],
+    ["reorder_favorites", { p_stop_ids: [stopId] }],
+    ["get_favorites", {}],
+    ["get_route", { p_route_id: busId }],
+    ["search", { p_query: "se" }],
+  ];
+  for (const [fn, args] of calls) {
+    refused(await anon.rpc(fn, args), "42501", DENIED, `anon ${fn}`);
   }
 });
