@@ -11,14 +11,18 @@ const MAX_DELAY_MS = 600_000;
 const LOG_DIR = "data/eta";
 const LOG_FILE = `${LOG_DIR}/collector.log`;
 
-const { values } = parseArgs({ options: { minutes: { type: "string" } } });
+const { values } = parseArgs({ options: { minutes: { type: "string" }, until: { type: "string" } } });
 const dbUrl = process.env.SUPABASE_DB_URL;
 const token = process.env.OLHOVIVO_TOKEN;
 if (!dbUrl || !token) {
-  console.error("usage: SUPABASE_DB_URL=... OLHOVIVO_TOKEN=... npm run eta:collect [-- --minutes <n>]");
+  console.error("usage: SUPABASE_DB_URL=... OLHOVIVO_TOKEN=... npm run eta:collect [-- --minutes <n> | --until <ISO time>]");
   process.exit(2);
 }
-const stopAt = values.minutes ? Date.now() + Number(values.minutes) * 60_000 : Infinity;
+const stopAt = values.minutes ? Date.now() + Number(values.minutes) * 60_000 : values.until ? Date.parse(values.until) : Infinity;
+if (Number.isNaN(stopAt)) {
+  console.error(`invalid --until: ${values.until}`);
+  process.exit(2);
+}
 
 mkdirSync(LOG_DIR, { recursive: true });
 
