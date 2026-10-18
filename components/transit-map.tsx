@@ -2,7 +2,7 @@
 
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { GeoJSONSource, Map as MapLibreMap } from "maplibre-gl";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MapSearch } from "@/components/map-search";
 import { RouteSheet } from "@/components/route-sheet";
@@ -33,7 +33,6 @@ const STOP_ZOOM = 16;
 const ROUTE_PADDING = { top: 80, bottom: 260, left: 40, right: 40 };
 
 export function TransitMap() {
-  const router = useRouter();
   const view = parseMapView(useSearchParams());
   const viewRef = useRef(view);
   useEffect(() => {
@@ -47,14 +46,16 @@ export function TransitMap() {
   const [error, setError] = useState<MapError | null>(null);
   const [loadedRoute, setLoadedRoute] = useState<LoadedRoute | null>(null);
 
-  const navigate = useCallback(
-    (next: Partial<MapView>) => router.replace(mapHref({ ...viewRef.current, ...next }), { scroll: false }),
-    [router],
-  );
+  const navigate = useCallback((next: Partial<MapView>) => {
+    window.history.replaceState(null, "", mapHref({ ...viewRef.current, ...next }));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    const stops = loadMapStops();
+    const stops = loadMapStops().then(
+      (loaded) => ({ loaded, reason: null }),
+      (reason: unknown) => ({ loaded: null, reason }),
+    );
     const startsAtPlace = viewRef.current.stop !== null || viewRef.current.route !== null;
 
     import("maplibre-gl")
@@ -79,27 +80,25 @@ export function TransitMap() {
           if (!startsAtPlace) {
             geolocate.trigger();
           }
-          stops
-            .then((loaded) => {
+          stops.then(({ loaded, reason }) => {
+            if (loaded) {
               stopsRef.current = new Map(loaded.map((stop) => [stop.id, stop]));
               map.addSource(STOPS_SOURCE, stopsSource(loaded));
               for (const layer of stopLayers()) {
                 map.addLayer(layer);
               }
-            })
-            .catch((reason: unknown) => {
+            } else {
               console.error("stops failed:", reason);
               setError("stops");
-            })
-            .finally(() => {
-              map.addSource(ROUTE_SOURCE, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-              for (const { layer, before } of routeLayers()) {
-                map.addLayer(layer, map.getLayer(before) ? before : undefined);
-              }
-              if (!cancelled) {
-                setReady(true);
-              }
-            });
+            }
+            map.addSource(ROUTE_SOURCE, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+            for (const { layer, before } of routeLayers()) {
+              map.addLayer(layer, map.getLayer(before) ? before : undefined);
+            }
+            if (!cancelled) {
+              setReady(true);
+            }
+          });
         });
         map.on("click", [...STOP_LAYERS, ROUTE_STOPS_LAYER], (event) => {
           const id = event.features?.[0]?.properties.id;
@@ -182,7 +181,9 @@ export function TransitMap() {
 
   return (
     <>
-      <div ref={container} aria-label={strings.map.label} className="absolute inset-0" />
+      <div className="absolute inset-0">
+        <div ref={container} aria-label={strings.map.label} className="h-full w-full" />
+      </div>
       <MapSearch onRoute={(id) => navigate({ route: id, dir: 0, stop: null })} onStop={(id) => navigate({ stop: id, route: null })} />
       {error && (
         <p
