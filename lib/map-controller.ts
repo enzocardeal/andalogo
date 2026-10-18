@@ -2,23 +2,24 @@ import type { GeoJSONSource, Map as MapLibreMap, StyleSpecification } from "mapl
 import {
   badgeRing,
   drawFavoriteBadge,
+  drawStopSign,
   EMPTY_COLLECTION,
-  FAVORITE_BADGE_LAYER,
   FAVORITE_IMAGE,
-  FAVORITE_LAYER,
-  favoriteFilter,
+  favoriteFilters,
   overlayLayers,
   ROUTE_SOURCE,
-  SELECTED_LAYER,
-  selectedFilter,
+  selectedFilters,
+  signStyles,
   STOPS_SOURCE,
   stopsSource,
 } from "./map-layers.ts";
 import { transitStyle, type Scheme } from "./map-style.ts";
 import type { MapStop } from "./stops-file.ts";
 
+const PIXEL_RATIO = 2;
 const BADGE_PIXELS = 36;
-const BADGE_PIXEL_RATIO = 2;
+const SIGN_PIXELS = { width: 36, height: 50 };
+const SELECTED_SIGN_PIXELS = { width: 48, height: 64 };
 
 export type MapController = {
   setScheme(scheme: Scheme): void;
@@ -27,6 +28,13 @@ export type MapController = {
   setFavorites(stopIds: Iterable<string>): void;
   setRoute(data: GeoJSON.FeatureCollection): void;
 };
+
+function canvasOf(width: number, height: number): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  return canvas;
+}
 
 export function createMapController(
   map: MapLibreMap,
@@ -41,11 +49,17 @@ export function createMapController(
   let favorites: string[] = [];
   let route = EMPTY_COLLECTION;
 
+  function addImages() {
+    const badge = drawFavoriteBadge(canvasOf(BADGE_PIXELS, BADGE_PIXELS), badgeRing(current));
+    map.addImage(FAVORITE_IMAGE, badge, { pixelRatio: PIXEL_RATIO });
+    for (const [name, style] of Object.entries(signStyles(current))) {
+      const size = style.outlineWidth > 2 ? SELECTED_SIGN_PIXELS : SIGN_PIXELS;
+      map.addImage(name, drawStopSign(canvasOf(size.width, size.height), style), { pixelRatio: PIXEL_RATIO });
+    }
+  }
+
   function addOverlays() {
-    const canvas = document.createElement("canvas");
-    canvas.width = BADGE_PIXELS;
-    canvas.height = BADGE_PIXELS;
-    map.addImage(FAVORITE_IMAGE, drawFavoriteBadge(canvas, badgeRing(current)), { pixelRatio: BADGE_PIXEL_RATIO });
+    addImages();
     map.addSource(STOPS_SOURCE, stops ? stopsSource(stops) : { type: "geojson", data: EMPTY_COLLECTION });
     map.addSource(ROUTE_SOURCE, { type: "geojson", data: route });
     for (const layer of overlayLayers(current)) {
@@ -61,9 +75,9 @@ export function createMapController(
       addOverlays();
       onReady();
     }
-    map.setFilter(SELECTED_LAYER, selectedFilter(selected));
-    map.setFilter(FAVORITE_LAYER, favoriteFilter(favorites));
-    map.setFilter(FAVORITE_BADGE_LAYER, favoriteFilter(favorites));
+    for (const [layer, filter] of Object.entries({ ...selectedFilters(selected), ...favoriteFilters(favorites) })) {
+      map.setFilter(layer, filter);
+    }
   }
 
   map.on("style.load", () => {

@@ -42,6 +42,8 @@ const nightId = `sp:rls-night-${run}`;
 const squareId = `sp:rls-square-${run}`;
 const emtuId = `ar:rls-emtu-${run}`;
 const timetableId = `ar:rls-t-${run}`;
+const emtu2Id = `ar:rls-emtu2-${run}`;
+const timetable2Id = `ar:rls-t2-${run}`;
 
 let member: User;
 let other: User;
@@ -116,6 +118,13 @@ before(async () => {
       (${timetableId}, 'weekday', 46800),
       (${timetableId}, 'weekday', 88200)`;
   await sql`
+    insert into public.routes (id, feed, short_name, long_name, mode, color, text_color)
+    values (${emtu2Id}, 'sptrans', '002', 'Embu - Sao Paulo', 'emtu', '#1D4ED8', '#FFFFFF')`;
+  await sql`insert into public.stop_routes (stop_id, route_id, direction_id, headsign) values (${squareId}, ${emtu2Id}, 0, 'Embu')`;
+  await sql`insert into public.timetable_patterns (id, route_id, direction_id, headsign) values (${timetable2Id}, ${emtu2Id}, 0, 'Embu')`;
+  await sql`insert into public.timetable_stops (pattern_id, stop_index, stop_id, offset_s) values (${timetable2Id}, 0, ${squareId}, 0)`;
+  await sql`insert into public.timetable_trips (pattern_id, day_type, start_s) values (${timetable2Id}, 'weekday', 43620)`;
+  await sql`
     insert into public.stop_routes (stop_id, route_id, direction_id, headsign) values
       (${stopId}, ${busId}, 0, 'Jd. B'),
       (${stopId}, ${nightId}, 0, 'Jd. C')`;
@@ -127,7 +136,7 @@ before(async () => {
 
 after(async () => {
   await sql`delete from public.stops where id in ${sql([stopId, squareId])}`;
-  await sql`delete from public.routes where id in ${sql([busId, nightId, emtuId])}`;
+  await sql`delete from public.routes where id in ${sql([busId, nightId, emtuId, emtu2Id])}`;
   await sql.end();
   const { users } = ok(await admin.auth.admin.listUsers({ perPage: 1000 }), "list users");
   for (const user of users.filter((u) => u.email?.endsWith(`-${run}@rls.test`))) {
@@ -381,7 +390,7 @@ test("anon cannot execute the favorite, route or search RPCs", async () => {
   }
 });
 
-test("get_stop lists the next four timetable departures, with trips after midnight", async () => {
+test("get_stop lists the next four timetable departures and sorts lines by the next one", async () => {
   const departuresAt = async (time: string) => {
     const stop = ok(await member.client.rpc("get_stop", { p_stop_id: squareId, p_at: time }), `get_stop at ${time}`) as {
       lines: { route_id: string; headway_s: number | null; departures: number[] | null }[];
@@ -389,9 +398,18 @@ test("get_stop lists the next four timetable departures, with trips after midnig
     return stop.lines.map((line) => [line.route_id, line.headway_s, line.departures]);
   };
 
-  assert.deepEqual(await departuresAt("2026-10-19T12:05:00-03:00"), [[emtuId, null, [300, 3900, 45300]]]);
-  assert.deepEqual(await departuresAt("2026-10-20T00:35:00-03:00"), [[emtuId, null, [300, 41700, 45300, 86700]]]);
-  assert.deepEqual(await departuresAt("2026-10-18T12:05:00-03:00"), [[emtuId, null, []]]);
+  assert.deepEqual(await departuresAt("2026-10-19T12:05:00-03:00"), [
+    [emtu2Id, null, [120]],
+    [emtuId, null, [300, 3900, 45300]],
+  ]);
+  assert.deepEqual(await departuresAt("2026-10-20T00:35:00-03:00"), [
+    [emtuId, null, [300, 41700, 45300, 86700]],
+    [emtu2Id, null, [41520]],
+  ]);
+  assert.deepEqual(await departuresAt("2026-10-18T12:05:00-03:00"), [
+    [emtuId, null, []],
+    [emtu2Id, null, []],
+  ]);
 
   const frequencyLine = ok(await member.client.rpc("get_stop", { p_stop_id: stopId }), "get_stop of a frequency stop") as {
     lines: { departures: number[] | null }[];

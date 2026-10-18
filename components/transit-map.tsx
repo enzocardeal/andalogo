@@ -24,6 +24,7 @@ type MapError = "map" | "stops";
 type LoadedRoute = { routeId: string; route: RouteDetails | null; failed: boolean };
 
 const STOP_ZOOM = 16;
+const SHEET_ENTRY = "andalogoSheet";
 const SHEET_SHARE = 0.6;
 const SEARCH_HEIGHT = 72;
 
@@ -33,6 +34,10 @@ async function loadBaseStyle(): Promise<StyleSpecification> {
     throw new Error(`map style returned ${response.status}`);
   }
   return response.json();
+}
+
+function isSheetEntry(): boolean {
+  return (window.history.state as Record<string, unknown> | null)?.[SHEET_ENTRY] === true;
 }
 
 export function TransitMap() {
@@ -54,9 +59,25 @@ export function TransitMap() {
   const [loadedRoute, setLoadedRoute] = useState<LoadedRoute | null>(null);
   const [favorites, setFavorites] = useState<ReadonlySet<string>>(new Set());
 
-  const navigate = useCallback((next: Partial<MapView>) => {
-    window.history.replaceState(null, "", mapHref({ ...viewRef.current, ...next }));
+  const navigate = useCallback((next: Partial<MapView>, mode: "push" | "replace" = "replace") => {
+    const href = mapHref({ ...viewRef.current, ...next });
+    if (mode === "push") {
+      window.history.pushState({ [SHEET_ENTRY]: true }, "", href);
+    } else {
+      window.history.replaceState({ [SHEET_ENTRY]: isSheetEntry() }, "", href);
+    }
   }, []);
+
+  const close = useCallback(
+    (next: Partial<MapView>) => {
+      if (isSheetEntry()) {
+        window.history.back();
+      } else {
+        navigate(next);
+      }
+    },
+    [navigate],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -114,7 +135,7 @@ export function TransitMap() {
         map.on("click", CLICKABLE_LAYERS, (event) => {
           const id = event.features?.[0]?.properties.id;
           if (typeof id === "string") {
-            navigate({ stop: id });
+            navigate({ stop: id }, viewRef.current.stop ? "replace" : "push");
           }
         });
         map.on("error", (event) => {
@@ -228,7 +249,10 @@ export function TransitMap() {
       <div className="absolute inset-0">
         <div ref={container} aria-label={strings.map.label} className="h-full w-full" />
       </div>
-      <MapSearch onRoute={(id) => navigate({ route: id, dir: 0, stop: null })} onStop={(id) => navigate({ stop: id, route: null })} />
+      <MapSearch
+        onRoute={(id) => navigate({ route: id, dir: 0, stop: null }, "push")}
+        onStop={(id) => navigate({ stop: id, route: null }, "push")}
+      />
       {error && (
         <p
           role="alert"
@@ -240,8 +264,8 @@ export function TransitMap() {
       {view.stop ? (
         <StopSheet
           stopId={view.stop}
-          onClose={() => navigate({ stop: null })}
-          onRoute={(routeId, dir) => navigate({ route: routeId, dir, stop: null })}
+          onClose={() => close({ stop: null })}
+          onRoute={(routeId, dir) => navigate({ route: routeId, dir, stop: null }, "push")}
           onFavoriteChange={changeFavorite}
         />
       ) : (
@@ -251,8 +275,8 @@ export function TransitMap() {
             failed={route?.failed ?? false}
             dir={view.dir}
             onDirection={(dir) => navigate({ dir })}
-            onStop={(id) => navigate({ stop: id })}
-            onClose={() => navigate({ route: null })}
+            onStop={(id) => navigate({ stop: id }, "push")}
+            onClose={() => close({ route: null })}
           />
         )
       )}
