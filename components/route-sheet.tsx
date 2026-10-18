@@ -112,7 +112,8 @@ export function RouteSheet({ route, failed, dir, selectedStopId, progress, onDir
                         {ticked ? (
                           <span
                             aria-hidden="true"
-                            className="grid size-3 shrink-0 place-items-center rounded-full bg-neutral-400 text-white dark:bg-neutral-600"
+                            className="grid size-3 shrink-0 place-items-center rounded-full"
+                            style={{ backgroundColor: color, color: route?.text_color ?? "#FFFFFF" }}
                             dangerouslySetInnerHTML={{ __html: CHECK_SVG }}
                           />
                         ) : (
