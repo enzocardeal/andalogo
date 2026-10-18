@@ -16,7 +16,8 @@
     "test": "node --test \"lib/**/*.test.ts\"",
     "test:rls": "node --test scripts/rls-test.ts",
     "gtfs:inspect": "node scripts/gtfs-inspect.ts",
-    "idmap:check": "node --env-file-if-exists=.env.local scripts/idmap-check.ts"
+    "idmap:check": "node --env-file-if-exists=.env.local scripts/idmap-check.ts",
+    "gtfs:load": "node --env-file-if-exists=.env.local scripts/gtfs-load.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
@@ -33,6 +34,7 @@
     "@types/react-dom": "^19",
     "@types/yauzl": "^3.4.0",
     "csv-parse": "^7.0.3",
+    "postgres": "^3.4.9",
     "tailwindcss": "^4",
     "typescript": "^5",
     "yauzl": "^3.4.0"

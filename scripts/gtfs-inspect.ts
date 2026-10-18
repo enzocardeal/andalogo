@@ -1,4 +1,4 @@
-import { readCsv, listEntries, type Row } from "../lib/gtfs/zip.ts";
+import { listEntries, readAll as rows, readCsv } from "../lib/gtfs/zip.ts";
 
 type Box = { minLat: number; maxLat: number; minLon: number; maxLon: number };
 
@@ -29,14 +29,6 @@ function boxText(box: Box | undefined): string {
   }
   const f = (n: number) => n.toFixed(3);
   return `lat ${f(box.minLat)}..${f(box.maxLat)}, lon ${f(box.minLon)}..${f(box.maxLon)}`;
-}
-
-async function rows(zip: string, file: string): Promise<Row[]> {
-  const all: Row[] = [];
-  for await (const row of readCsv(zip, file)) {
-    all.push(row);
-  }
-  return all;
 }
 
 async function inspect(zip: string): Promise<void> {

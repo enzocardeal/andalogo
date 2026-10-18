@@ -3,16 +3,22 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
+import { StopSheet } from "@/components/stop-sheet";
 import { INITIAL_ZOOM, MAP_STYLE_URL, MAP_WORKER_PATH, SAO_PAULO_CENTER } from "@/lib/map";
+import { loadMapStops, SELECTED_LAYER, STOP_LAYERS, STOPS_SOURCE, stopLayers, stopsSource } from "@/lib/map-stops";
 import { strings } from "@/lib/strings";
+
+type MapError = "map" | "stops";
 
 export function TransitMap() {
   const container = useRef<HTMLDivElement>(null);
-  const [failed, setFailed] = useState(false);
+  const mapRef = useRef<MapLibreMap | null>(null);
+  const [error, setError] = useState<MapError | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
 
   useEffect(() => {
-    let map: MapLibreMap | undefined;
     let cancelled = false;
+    const stops = loadMapStops();
 
     import("maplibre-gl")
       .then((maplibregl) => {
@@ -20,7 +26,7 @@ export function TransitMap() {
           return;
         }
         maplibregl.setWorkerUrl(`${MAP_WORKER_PATH}?v=${maplibregl.getVersion()}`);
-        const loaded = new maplibregl.Map({
+        const map = new maplibregl.Map({
           container: container.current,
           style: MAP_STYLE_URL,
           center: SAO_PAULO_CENTER,
@@ -31,38 +37,66 @@ export function TransitMap() {
           positionOptions: { enableHighAccuracy: true },
           trackUserLocation: true,
         });
-        loaded.addControl(geolocate, "bottom-right");
-        loaded.once("load", () => geolocate.trigger());
-        loaded.on("error", (event) => {
-          if (!loaded.isStyleLoaded()) {
-            console.error("map failed:", event.error);
-            setFailed(true);
+        map.addControl(geolocate, "bottom-right");
+        map.once("load", () => {
+          geolocate.trigger();
+          stops
+            .then((loaded) => {
+              map.addSource(STOPS_SOURCE, stopsSource(loaded));
+              for (const layer of stopLayers()) {
+                map.addLayer(layer);
+              }
+            })
+            .catch((reason: unknown) => {
+              console.error("stops failed:", reason);
+              setError("stops");
+            });
+        });
+        map.on("click", STOP_LAYERS, (event) => {
+          const id = event.features?.[0]?.properties.id;
+          if (typeof id === "string") {
+            setSelected(id);
           }
         });
-        map = loaded;
+        map.on("error", (event) => {
+          if (!map.isStyleLoaded()) {
+            console.error("map failed:", event.error);
+            setError("map");
+          }
+        });
+        mapRef.current = map;
       })
-      .catch((error: unknown) => {
-        console.error("map failed:", error);
-        setFailed(true);
+      .catch((reason: unknown) => {
+        console.error("map failed:", reason);
+        setError("map");
       });
 
     return () => {
       cancelled = true;
-      map?.remove();
+      mapRef.current?.remove();
+      mapRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (map?.getLayer(SELECTED_LAYER)) {
+      map.setFilter(SELECTED_LAYER, ["==", ["get", "id"], selected ?? ""]);
+    }
+  }, [selected]);
 
   return (
     <>
       <div ref={container} aria-label={strings.map.label} className="absolute inset-0" />
-      {failed && (
+      {error && (
         <p
           role="alert"
           className="absolute inset-x-4 top-[calc(env(safe-area-inset-top)+4.5rem)] rounded-lg bg-red-50 p-3 text-sm text-red-800"
         >
-          {strings.map.failed}
+          {error === "map" ? strings.map.failed : strings.map.stopsFailed}
         </p>
       )}
+      {selected && <StopSheet stopId={selected} onClose={() => setSelected(null)} />}
     </>
   );
 }

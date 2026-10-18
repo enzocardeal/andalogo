@@ -7,6 +7,22 @@ export const strings = {
   map: {
     label: "Mapa de São Paulo",
     failed: "Não foi possível carregar o mapa. Confira a conexão e tente de novo.",
+    stopsFailed: "Não foi possível carregar as paradas. Confira a conexão e tente de novo.",
+  },
+  modes: {
+    bus: "Ônibus",
+    metro: "Metrô",
+    cptm: "CPTM",
+    emtu: "EMTU",
+  },
+  stop: {
+    close: "Fechar",
+    failed: "Não foi possível carregar a parada. Tente de novo.",
+    notFound: "Parada não encontrada.",
+    noLines: "Nenhuma linha passa nesta parada.",
+    scheduled: "Frequência programada",
+    every: "a cada ~",
+    noService: "Sem serviço agora",
   },
   account: {
     menu: "Conta",

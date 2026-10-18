@@ -6,7 +6,7 @@ Stack: Next.js on Vercel (`gru1`), Supabase (`sa-east-1`), MapLibre GL JS with O
 
 ## Status
 
-Milestone M0: Google login with invite, full-screen map with "locate me", and the data scripts.
+Milestone M1: all SPTrans bus stops and Metrô and CPTM stations on the map. A tap on a stop shows its lines and the scheduled frequency now.
 
 | Milestone | Content |
 |---|---|
@@ -70,6 +70,7 @@ Milestone M0: Google login with invite, full-screen map with "locate me", and th
 | `INVITE_CODE` | Code that the `/invite` page requires |
 | `CRON_SECRET` | Bearer token that Vercel sends to the keepalive cron |
 | `OLHOVIVO_TOKEN` | Olho Vivo API token. Server only. |
+| `SUPABASE_DB_URL` | Postgres connection string for `gtfs:load`. Use the "Session pooler" string from Supabase → Connect. Local only, never in Vercel. |
 | `NEXT_PUBLIC_MAP_STYLE_URL` | Optional. Map style URL. The default is OpenFreeMap "liberty". |
 
 The secret keys must never get the `NEXT_PUBLIC_` prefix.
@@ -110,6 +111,15 @@ curl -L -o data/artesp/gtfs.zip "https://dadosabertos.artesp.sp.gov.br/dataset/9
 ```
 
 `npm run gtfs:inspect -- <feed.zip> …` prints the files, routes by type, rail lines, stops, trips, frequencies and shapes of each feed.
+
+`npm run gtfs:load -- --feed sptrans --zip data/sptrans/gtfs.zip` loads the feed. It needs `SUPABASE_DB_URL`, `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in `.env.local`. It does these steps:
+
+1. It skips the load when the active version has the same sha256. `--force` loads it again.
+2. It builds the stops, routes, lines per stop and frequency windows from the feed.
+3. It uploads the stops file for the map to the public Storage bucket `gtfs`, and creates the bucket when it is missing.
+4. In one transaction, it replaces the rows of the feed and records the version in `feed_versions`. The app reads the old rows until the commit.
+
+Run it again when SPTrans publishes a new feed, about once a week.
 
 `npm run idmap:check -- --gtfs data/sptrans/gtfs.zip` checks that GTFS IDs match Olho Vivo IDs. It needs `OLHOVIVO_TOKEN` in `.env.local`. Run it on a weekday between 08:00 and 19:00. It checks three hypotheses on 100 random bus stops and 20 corridor stops:
 

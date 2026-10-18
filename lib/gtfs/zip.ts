@@ -62,3 +62,11 @@ export async function* readCsv(path: string, file: string): AsyncGenerator<Row> 
     zip.close();
   }
 }
+
+export async function readAll(path: string, file: string): Promise<Row[]> {
+  const rows: Row[] = [];
+  for await (const row of readCsv(path, file)) {
+    rows.push(row);
+  }
+  return rows;
+}
