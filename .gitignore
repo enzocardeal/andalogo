@@ -158,3 +158,6 @@ next-env.d.ts
 # GTFS downloads
 /data
 /public/maplibre-gl-worker.js
+
+# Temporary local scripts
+/scripts/.*.tmp.ts
