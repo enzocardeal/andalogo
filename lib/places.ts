@@ -3,6 +3,7 @@ import { SAO_PAULO_CENTER } from "./map.ts";
 import type { MapStop } from "./stops-file.ts";
 
 export const PHOTON_URL = "https://photon.komoot.io/api/";
+export const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
 export const NEARBY_RADIUS_M = 1000;
 export const MIN_PLACE_QUERY = 3;
 
@@ -10,6 +11,7 @@ const MAX_PLACE_QUERY = 100;
 const PLACE_LIMIT = 8;
 const TIMEOUT_MS = 4000;
 const CACHE_TTL_MS = 600_000;
+const NOMINATIM_SPACING_MS = 1100;
 const MAX_CACHE_ENTRIES = 500;
 const WALK_DETOUR = 1.3;
 const WALK_M_PER_MIN = 80;
@@ -34,6 +36,17 @@ export type PhotonFeature = {
   };
 };
 
+export type NominatimResult = {
+  osm_type?: string;
+  osm_id?: number;
+  category?: string;
+  type?: string;
+  name?: string;
+  lat: string;
+  lon: string;
+  address?: { road?: string; house_number?: string; suburb?: string; city_district?: string; city?: string };
+};
+
 export type PlaceQuery = { q: string; lat: number; lon: number };
 
 export type NearbyStop = MapStop & { distanceM: number };
@@ -42,7 +55,7 @@ export function toPlaces(features: PhotonFeature[]): Place[] {
   const places: Place[] = [];
   const seen = new Set<string>();
   features.forEach(({ geometry, properties: p }, index) => {
-    if (p.osm_key === "public_transport" || TRANSIT_VALUES.has(p.osm_value ?? "")) {
+    if (isTransit(p.osm_key, p.osm_value)) {
       return;
     }
     const address = p.street ? `${p.street}${p.housenumber ? `, ${p.housenumber}` : ""}` : null;
@@ -60,6 +73,35 @@ export function toPlaces(features: PhotonFeature[]): Place[] {
     places.push({ id: p.osm_type && p.osm_id ? `${p.osm_type}${p.osm_id}` : `place-${index}`, name, detail, lat, lon });
   });
   return places;
+}
+
+function isTransit(key: string | undefined, value: string | undefined): boolean {
+  return key === "public_transport" || TRANSIT_VALUES.has(value ?? "");
+}
+
+export function nominatimToPlaces(results: NominatimResult[]): Place[] {
+  return toPlaces(
+    results.map((result) => ({
+      geometry: { coordinates: [Number(result.lon), Number(result.lat)] },
+      properties: {
+        osm_type: result.osm_type?.charAt(0).toUpperCase(),
+        osm_id: result.osm_id,
+        osm_key: result.category,
+        osm_value: result.type,
+        name: result.name || undefined,
+        street: result.address?.road,
+        housenumber: result.address?.house_number,
+        district: result.address?.suburb ?? result.address?.city_district,
+        city: result.address?.city,
+      },
+    })),
+  );
+}
+
+export function mergePlaces(first: Place[], second: Place[]): Place[] {
+  const ids = new Set(first.map((place) => place.id));
+  const names = new Set(first.map((place) => `${place.name}|${place.detail}`));
+  return [...first, ...second.filter((place) => !ids.has(place.id) && !names.has(`${place.name}|${place.detail}`))];
 }
 
 export function nearbyStops(stops: Iterable<MapStop>, point: Point): NearbyStop[] {
@@ -110,10 +152,39 @@ export function photonUrl({ q, lat, lon }: PlaceQuery, baseUrl = PHOTON_URL): st
   return `${baseUrl}?${params}`;
 }
 
-export function createPlaceSearch(fetchImpl: typeof fetch = fetch, now = () => Date.now(), baseUrl = PHOTON_URL) {
+export function nominatimUrl({ q }: PlaceQuery, baseUrl = NOMINATIM_URL): string {
+  const params = new URLSearchParams({
+    q,
+    format: "jsonv2",
+    limit: String(PLACE_LIMIT),
+    countrycodes: "br",
+    viewbox: [BOUNDS.west, BOUNDS.north, BOUNDS.east, BOUNDS.south].join(","),
+    bounded: "1",
+    addressdetails: "1",
+    "accept-language": "pt-BR",
+  });
+  return `${baseUrl}?${params}`;
+}
+
+export type PlaceSearchOptions = {
+  fetchImpl?: typeof fetch;
+  now?: () => number;
+  sleep?: (ms: number) => Promise<void>;
+  photonBase?: string;
+  nominatimBase?: string;
+};
+
+export function createPlaceSearch({
+  fetchImpl = fetch,
+  now = () => Date.now(),
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  photonBase = PHOTON_URL,
+  nominatimBase = NOMINATIM_URL,
+}: PlaceSearchOptions = {}) {
   const cache = new Map<string, { expires: number; places: Promise<Place[]> }>();
-  return function searchPlaces(query: PlaceQuery): Promise<Place[]> {
-    const key = `${query.q.toLowerCase()}|${query.lat.toFixed(2)}|${query.lon.toFixed(2)}`;
+  let nextNominatim = 0;
+
+  function cached(key: string, load: () => Promise<Place[]>): Promise<Place[]> {
     const time = now();
     const hit = cache.get(key);
     if (hit && hit.expires > time) {
@@ -122,17 +193,48 @@ export function createPlaceSearch(fetchImpl: typeof fetch = fetch, now = () => D
     if (cache.size >= MAX_CACHE_ENTRIES) {
       cache.clear();
     }
-    const places = fetchImpl(photonUrl(query, baseUrl), {
-      headers: { "User-Agent": USER_AGENT },
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    }).then(async (response) => {
-      if (!response.ok) {
-        throw new Error(`photon returned ${response.status}`);
-      }
-      return toPlaces(((await response.json()) as { features: PhotonFeature[] }).features ?? []);
-    });
+    const places = load();
     cache.set(key, { expires: time + CACHE_TTL_MS, places });
     places.catch(() => cache.delete(key));
     return places;
-  };
+  }
+
+  async function getJson<T>(url: string, source: string): Promise<T> {
+    const response = await fetchImpl(url, { headers: { "User-Agent": USER_AGENT }, signal: AbortSignal.timeout(TIMEOUT_MS) });
+    if (!response.ok) {
+      throw new Error(`${source} returned ${response.status}`);
+    }
+    return (await response.json()) as T;
+  }
+
+  async function nominatim(query: PlaceQuery): Promise<Place[]> {
+    const wait = Math.max(0, nextNominatim - now());
+    nextNominatim = Math.max(now(), nextNominatim) + NOMINATIM_SPACING_MS;
+    if (wait > 0) {
+      await sleep(wait);
+    }
+    return nominatimToPlaces(await getJson<NominatimResult[]>(nominatimUrl(query, nominatimBase), "nominatim"));
+  }
+
+  function keyOf(query: PlaceQuery): string {
+    return `${query.q.toLowerCase()}|${query.lat.toFixed(2)}|${query.lon.toFixed(2)}`;
+  }
+
+  function suggest(query: PlaceQuery): Promise<Place[]> {
+    return cached(`suggest|${keyOf(query)}`, async () =>
+      toPlaces((await getJson<{ features?: PhotonFeature[] }>(photonUrl(query, photonBase), "photon")).features ?? []),
+    );
+  }
+
+  function full(query: PlaceQuery): Promise<Place[]> {
+    return cached(`full|${keyOf(query)}`, async () => {
+      const [named, typed] = await Promise.allSettled([nominatim(query), suggest(query)]);
+      if (named.status === "rejected" && typed.status === "rejected") {
+        throw named.reason;
+      }
+      return mergePlaces(named.status === "fulfilled" ? named.value : [], typed.status === "fulfilled" ? typed.value : []);
+    });
+  }
+
+  return { suggest, full };
 }

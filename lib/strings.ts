@@ -60,6 +60,8 @@ export const strings = {
     lines: "Linhas",
     stops: "Paradas",
     places: "Lugares",
+    morePlaces: "Buscar mais lugares",
+    searching: "Buscando…",
     empty: "Nada encontrado.",
     failed: "A busca falhou. Tente de novo.",
     placesFailed: "Não foi possível buscar lugares agora.",

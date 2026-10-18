@@ -14,7 +14,25 @@ const PLACE_DEBOUNCE_MS = 350;
 
 type Found = { query: string; result: SearchResult | null };
 
-type FoundPlaces = { query: string; places: Place[] | null };
+type FoundPlaces = { query: string; places: Place[] | null; full: boolean };
+
+async function fetchPlaces(term: string, center: Point | null, full: boolean): Promise<Place[] | null> {
+  const params = new URLSearchParams({ q: term });
+  if (center) {
+    params.set("lat", center.lat.toFixed(4));
+    params.set("lon", center.lon.toFixed(4));
+  }
+  if (full) {
+    params.set("full", "1");
+  }
+  try {
+    const response = await fetch(`/api/places?${params}`, { cache: "no-store" });
+    return response.ok ? ((await response.json()) as { places: Place[] }).places : null;
+  } catch (error) {
+    console.error("places failed:", error);
+    return null;
+  }
+}
 
 type MapSearchProps = {
   onRoute: (routeId: string) => void;
@@ -27,6 +45,7 @@ export function MapSearch({ onRoute, onStop, onPlace, bias }: MapSearchProps) {
   const [query, setQuery] = useState("");
   const [found, setFound] = useState<Found | null>(null);
   const [foundPlaces, setFoundPlaces] = useState<FoundPlaces | null>(null);
+  const [searchingMore, setSearchingMore] = useState<string | null>(null);
   const biasRef = useRef(bias);
   const term = query.trim();
   useEffect(() => {
@@ -62,21 +81,9 @@ export function MapSearch({ onRoute, onStop, onPlace, bias }: MapSearchProps) {
     }
     let cancelled = false;
     const timer = setTimeout(async () => {
-      const params = new URLSearchParams({ q: term });
-      const center = biasRef.current();
-      if (center) {
-        params.set("lat", center.lat.toFixed(4));
-        params.set("lon", center.lon.toFixed(4));
-      }
-      let places: Place[] | null = null;
-      try {
-        const response = await fetch(`/api/places?${params}`, { cache: "no-store" });
-        places = response.ok ? ((await response.json()) as { places: Place[] }).places : null;
-      } catch (error) {
-        console.error("places failed:", error);
-      }
+      const places = await fetchPlaces(term, biasRef.current(), false);
       if (!cancelled) {
-        setFoundPlaces({ query: term, places });
+        setFoundPlaces((previous) => (previous?.query === term && previous.full ? previous : { query: term, places, full: false }));
       }
     }, PLACE_DEBOUNCE_MS);
     return () => {
@@ -96,6 +103,16 @@ export function MapSearch({ onRoute, onStop, onPlace, bias }: MapSearchProps) {
     pick();
   }
 
+  async function searchMore() {
+    if (!placesExpected || searchingMore === term) {
+      return;
+    }
+    setSearchingMore(term);
+    const places = await fetchPlaces(term, biasRef.current(), true);
+    setFoundPlaces({ query: term, places, full: true });
+    setSearchingMore((pending) => (pending === term ? null : pending));
+  }
+
   return (
     <div className="absolute inset-x-3 top-[calc(env(safe-area-inset-top)+0.75rem)] z-10 flex flex-col gap-2">
       <div className="flex items-center rounded-full bg-white dark:bg-neutral-900 shadow-md">
@@ -104,7 +121,14 @@ export function MapSearch({ onRoute, onStop, onPlace, bias }: MapSearchProps) {
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          onKeyDown={(event) => event.key === "Escape" && setQuery("")}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              setQuery("");
+            } else if (event.key === "Enter") {
+              event.currentTarget.blur();
+              searchMore();
+            }
+          }}
           aria-label={strings.search.label}
           placeholder={strings.search.placeholder}
           autoComplete="off"
@@ -122,12 +146,15 @@ export function MapSearch({ onRoute, onStop, onPlace, bias }: MapSearchProps) {
           </button>
         )}
       </div>
-      {(current || currentPlaces) && (
+      {(current || currentPlaces || searchingMore === term) && (
         <div className="max-h-[50dvh] overflow-y-auto overscroll-contain rounded-lg bg-white dark:bg-neutral-900 p-2 shadow-md">
           <SearchResults
             found={current}
             places={currentPlaces}
             placesExpected={placesExpected}
+            canSearchMore={placesExpected && !currentPlaces?.full}
+            searchingMore={searchingMore === term}
+            onSearchMore={searchMore}
             onRoute={(id) => choose(() => onRoute(id))}
             onStop={(id) => choose(() => onStop(id))}
             onPlace={(place) => choose(() => onPlace(place))}
@@ -142,22 +169,34 @@ type SearchResultsProps = {
   found: Found | null;
   places: FoundPlaces | null;
   placesExpected: boolean;
+  canSearchMore: boolean;
+  searchingMore: boolean;
+  onSearchMore: () => void;
   onRoute: (routeId: string) => void;
   onStop: (stopId: string) => void;
   onPlace: (place: Place) => void;
 };
 
-function SearchResults({ found, places, placesExpected, onRoute, onStop, onPlace }: SearchResultsProps) {
+function SearchResults({
+  found,
+  places,
+  placesExpected,
+  canSearchMore,
+  searchingMore,
+  onSearchMore,
+  onRoute,
+  onStop,
+  onPlace,
+}: SearchResultsProps) {
   const routes = found?.result?.routes ?? [];
   const stops = found?.result?.stops ?? [];
   const placeList = places?.places ?? [];
   const placesFailed = places !== null && places.places === null;
   const settled = Boolean(found?.result) && (!placesExpected || (places !== null && !placesFailed));
-  if (settled && routes.length === 0 && stops.length === 0 && placeList.length === 0) {
-    return <p className="p-2 text-sm text-neutral-600 dark:text-neutral-400">{strings.search.empty}</p>;
-  }
+  const empty = settled && routes.length === 0 && stops.length === 0 && placeList.length === 0;
   return (
     <div className="flex flex-col gap-2">
+      {empty && <p className="p-2 text-sm text-neutral-600 dark:text-neutral-400">{strings.search.empty}</p>}
       {found && !found.result && <p role="alert" className="p-2 text-sm text-red-700 dark:text-red-400">{strings.search.failed}</p>}
       {routes.length > 0 && (
         <section>
@@ -218,6 +257,16 @@ function SearchResults({ found, places, placesExpected, onRoute, onStop, onPlace
       )}
       {placesFailed && (
         <p className="p-2 text-xs text-neutral-500 dark:text-neutral-400">{strings.search.placesFailed}</p>
+      )}
+      {canSearchMore && (
+        <button
+          type="button"
+          onClick={onSearchMore}
+          disabled={searchingMore}
+          className="min-h-11 rounded px-2 text-left text-sm font-medium text-blue-700 disabled:text-neutral-500 dark:text-blue-400"
+        >
+          {searchingMore ? strings.search.searching : strings.search.morePlaces}
+        </button>
       )}
     </div>
   );

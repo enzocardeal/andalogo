@@ -3,7 +3,10 @@ import { test } from "node:test";
 import {
   createPlaceSearch,
   formatDistance,
+  mergePlaces,
   nearbyStops,
+  nominatimToPlaces,
+  nominatimUrl,
   parsePlaceQuery,
   photonUrl,
   toPlaces,
@@ -76,23 +79,80 @@ test("parsePlaceQuery checks the text and keeps the bias inside Grande São Paul
   assert.equal(parsePlaceQuery(new URLSearchParams(`q=${"a".repeat(101)}`)), null);
 });
 
-test("createPlaceSearch asks Photon once per query and area for 10 minutes", async () => {
+test("suggest asks Photon once per query and area for 10 minutes", async () => {
   let time = 0;
   const calls: string[] = [];
   const fetchImpl = (async (input: string | URL | Request) => {
     calls.push(String(input));
     return Response.json({ features: [feature({ osm_type: "N", osm_id: 1, name: "Bráz Pizzaria" })] });
   }) as typeof fetch;
-  const search = createPlaceSearch(fetchImpl, () => time, "https://photon.test/api/");
+  const { suggest } = createPlaceSearch({ fetchImpl, now: () => time, photonBase: "https://photon.test/api/" });
   const query = { q: "Braz", lat: -23.5401, lon: -46.5702 };
-  assert.deepEqual((await search(query)).map((place) => place.name), ["Bráz Pizzaria"]);
-  await search({ ...query, q: "braz", lat: -23.5398 });
+  assert.deepEqual((await suggest(query)).map((place) => place.name), ["Bráz Pizzaria"]);
+  await suggest({ ...query, q: "braz", lat: -23.5398 });
   assert.equal(calls.length, 1);
   assert.equal(calls[0], photonUrl(query, "https://photon.test/api/"));
   time += 600_001;
-  await search(query);
+  await suggest(query);
   assert.equal(calls.length, 2);
 
-  const failing = createPlaceSearch((async () => new Response("", { status: 503 })) as typeof fetch, () => 0);
-  await assert.rejects(failing(query), /photon returned 503/);
+  const failing = createPlaceSearch({ fetchImpl: (async () => new Response("", { status: 503 })) as typeof fetch, now: () => 0 });
+  await assert.rejects(failing.suggest(query), /photon returned 503/);
+});
+
+test("nominatimToPlaces maps Nominatim results and drops transit", () => {
+  const places = nominatimToPlaces([
+    {
+      osm_type: "way",
+      osm_id: 9,
+      category: "tourism",
+      type: "museum",
+      name: "Museu de Arte de São Paulo",
+      lat: "-23.5614",
+      lon: "-46.6559",
+      address: { road: "Avenida Paulista", house_number: "1578", suburb: "Bela Vista" },
+    },
+    { osm_type: "node", osm_id: 3, category: "highway", type: "bus_stop", name: "Avenida Paulista, 1578", lat: "-23.56", lon: "-46.65" },
+    { osm_type: "node", osm_id: 4, category: "place", type: "house", name: "", lat: "-23.5", lon: "-46.6", address: { road: "Rua A", house_number: "10", city: "São Paulo" } },
+  ]);
+  assert.deepEqual(
+    places.map((place) => [place.id, place.name, place.detail, place.lat]),
+    [
+      ["W9", "Museu de Arte de São Paulo", "Avenida Paulista, 1578 · Bela Vista", -23.5614],
+      ["N4", "Rua A, 10", "São Paulo", -23.5],
+    ],
+  );
+});
+
+test("mergePlaces keeps the first list and adds new places from the second", () => {
+  const museum = { id: "W9", name: "MASP", detail: "Bela Vista", lat: 0, lon: 0 };
+  const cafe = { id: "N1", name: "MASP Suplicy", detail: "Bela Vista", lat: 0, lon: 0 };
+  assert.deepEqual(mergePlaces([museum], [cafe, museum, { ...museum, id: "W10" }]).map((place) => place.id), ["W9", "N1"]);
+});
+
+test("full asks Nominatim and Photon, puts Nominatim first and spaces Nominatim calls by 1.1 s", async () => {
+  let time = 0;
+  const waits: number[] = [];
+  const fetchImpl = (async (input: string | URL | Request) => {
+    const url = String(input);
+    if (url.startsWith("https://nominatim.test/")) {
+      return Response.json([{ osm_type: "way", osm_id: 9, category: "tourism", type: "museum", name: "Museu de Arte de São Paulo", lat: "-23.56", lon: "-46.65" }]);
+    }
+    return Response.json({ features: [feature({ osm_type: "N", osm_id: 1, osm_value: "cafe", name: "MASP Suplicy" })] });
+  }) as typeof fetch;
+  const { full } = createPlaceSearch({
+    fetchImpl,
+    now: () => time,
+    sleep: async (ms) => {
+      waits.push(ms);
+      time += ms;
+    },
+    photonBase: "https://photon.test/api/",
+    nominatimBase: "https://nominatim.test/search",
+  });
+  const query = { q: "masp", lat: -23.56, lon: -46.65 };
+  assert.deepEqual((await full(query)).map((place) => place.name), ["Museu de Arte de São Paulo", "MASP Suplicy"]);
+  await full({ ...query, q: "usp" });
+  assert.deepEqual(waits, [1100]);
+  assert.ok(nominatimUrl(query).includes("viewbox=-47.2%2C-23.1%2C-45.7%2C-24.1"));
 });
