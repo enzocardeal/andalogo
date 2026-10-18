@@ -172,14 +172,6 @@ export function overlayLayers(scheme: Scheme): LayerSpecification[] {
       },
     },
     {
-      id: BUS_STOPS_LAYER,
-      type: "symbol",
-      source: STOPS_SOURCE,
-      minzoom: BUS_MIN_ZOOM,
-      filter: stopFilters(null, [])[BUS_STOPS_LAYER],
-      layout: { ...signLayout, "icon-size": ["interpolate", ["linear"], ["zoom"], 15, 0.75, 18, 1] },
-    },
-    {
       id: "stop-arrows",
       type: "symbol",
       source: STOPS_SOURCE,
@@ -187,12 +179,21 @@ export function overlayLayers(scheme: Scheme): LayerSpecification[] {
       filter: ["all", IS_SIGN, ["!=", ["get", "bearing"], null]],
       layout: {
         "icon-image": ARROW_IMAGE,
+        "icon-anchor": "bottom",
         "icon-rotate": ["get", "bearing"],
         "icon-rotation-alignment": "map",
         "icon-allow-overlap": true,
         "icon-ignore-placement": true,
         "icon-size": ["interpolate", ["linear"], ["zoom"], 15, 0.75, 18, 1],
       },
+    },
+    {
+      id: BUS_STOPS_LAYER,
+      type: "symbol",
+      source: STOPS_SOURCE,
+      minzoom: BUS_MIN_ZOOM,
+      filter: stopFilters(null, [])[BUS_STOPS_LAYER],
+      layout: { ...signLayout, "icon-size": ["interpolate", ["linear"], ["zoom"], 15, 0.75, 18, 1] },
     },
     {
       id: FAVORITE_LAYER,
@@ -339,19 +340,31 @@ export function arrowColors(scheme: Scheme): { fill: string; outline: string } {
 export function drawStopArrow(canvas: HTMLCanvasElement, colors: { fill: string; outline: string }): ImageData {
   const { width, height } = canvas;
   const context = canvas.getContext("2d")!;
+  const middle = width / 2;
+  const head = width * 0.75;
+  const outline = width * 0.12;
   context.clearRect(0, 0, width, height);
-  context.beginPath();
-  context.moveTo(width / 2, height * 0.08);
-  context.lineTo(width * 0.86, height * 0.88);
-  context.lineTo(width / 2, height * 0.68);
-  context.lineTo(width * 0.14, height * 0.88);
-  context.closePath();
+  context.lineCap = "round";
   context.lineJoin = "round";
-  context.lineWidth = width * 0.12;
-  context.strokeStyle = colors.outline;
-  context.stroke();
-  context.fillStyle = colors.fill;
-  context.fill();
+  const draw = (color: string, extra: number) => {
+    context.strokeStyle = color;
+    context.fillStyle = color;
+    context.lineWidth = width * 0.17 + extra;
+    context.beginPath();
+    context.moveTo(middle, height - outline);
+    context.lineTo(middle, head);
+    context.stroke();
+    context.beginPath();
+    context.moveTo(middle, outline);
+    context.lineTo(width - outline, head + outline);
+    context.lineTo(outline, head + outline);
+    context.closePath();
+    context.lineWidth = extra || 1;
+    context.stroke();
+    context.fill();
+  };
+  draw(colors.outline, outline * 2);
+  draw(colors.fill, 0);
   return context.getImageData(0, 0, width, height);
 }
 
