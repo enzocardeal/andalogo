@@ -22,8 +22,8 @@ test("departureLabel shows minutes below one hour and the clock time after", () 
 });
 
 test("lineTimes uses the frequency for lines without a timetable", () => {
-  assert.deepEqual(lineTimes({ headway_s: 600, departures: null }, NOON), { main: "a cada ~10 min", next: null, muted: false });
-  assert.deepEqual(lineTimes({ headway_s: null, departures: null }, NOON), { main: "Sem serviço agora", next: null, muted: true });
+  assert.deepEqual(lineTimes({ headway_s: 600, departures: null }, NOON), { main: "a cada ~10 min", next: null, muted: false, live: false });
+  assert.deepEqual(lineTimes({ headway_s: null, departures: null }, NOON), { main: "Sem serviço agora", next: null, muted: true, live: false });
 });
 
 test("lineTimes shows the next departure and the ones after it", () => {
@@ -31,11 +31,30 @@ test("lineTimes shows the next departure and the ones after it", () => {
     main: "5 min",
     next: "depois 20 min · 35 min · 14:00",
     muted: false,
+    live: false,
   });
-  assert.deepEqual(lineTimes({ headway_s: null, departures: [300] }, NOON), { main: "5 min", next: null, muted: false });
+  assert.deepEqual(lineTimes({ headway_s: null, departures: [300] }, NOON), { main: "5 min", next: null, muted: false, live: false });
   assert.deepEqual(lineTimes({ headway_s: null, departures: [] }, NOON), {
     main: "Sem mais partidas hoje",
     next: null,
     muted: true,
+    live: false,
+  });
+});
+
+test("lineTimes shows live vehicles first, and the schedule when no vehicle is located", () => {
+  const line = { headway_s: 600, departures: null };
+  assert.deepEqual(lineTimes(line, NOON, { vehicles: [{ minutes: 0 }, { minutes: 7 }, { minutes: 15 }] }), {
+    main: "agora",
+    next: "depois 7 min · 15 min",
+    muted: false,
+    live: true,
+  });
+  assert.deepEqual(lineTimes(line, NOON, { vehicles: [{ minutes: 4 }] }), { main: "4 min", next: null, muted: false, live: true });
+  assert.deepEqual(lineTimes(line, NOON, { vehicles: [] }), {
+    main: "a cada ~10 min",
+    next: "Sem previsão ao vivo",
+    muted: false,
+    live: false,
   });
 });

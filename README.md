@@ -6,7 +6,7 @@ Stack: Next.js on Vercel (`gru1`), Supabase (`sa-east-1`), MapLibre GL JS with O
 
 ## Status
 
-Milestones M0, M1, M3, M4 and M5: Google login with invite, all SPTrans and EMTU stops and the Metrô and CPTM stations on the map, with the scheduled frequency (SPTrans) or the next timetable departures (EMTU) per line, the map as the start screen, favorite stops, line routes, and search. M2 (live arrivals) waits for the Olho Vivo token.
+Milestones M0, M1, M3, M4 and M5: Google login with invite, all SPTrans and EMTU stops and the Metrô and CPTM stations on the map, with the scheduled frequency (SPTrans) or the next timetable departures (EMTU) per line, the map as the start screen, favorite stops, line routes, and search. M2 (live bus arrivals) is built and tested against a fake Olho Vivo server; it turns on when `OLHOVIVO_TOKEN` is set.
 
 | Milestone | Content |
 |---|---|
@@ -69,11 +69,22 @@ Milestones M0, M1, M3, M4 and M5: Google login with invite, all SPTrans and EMTU
 | `SUPABASE_SERVICE_ROLE_KEY` | Secret key that bypasses RLS. Only `/api/invite` and `/api/cron/keepalive` use it. |
 | `INVITE_CODE` | Code that the `/invite` page requires |
 | `CRON_SECRET` | Bearer token that Vercel sends to the keepalive cron |
-| `OLHOVIVO_TOKEN` | Olho Vivo API token. Server only. |
+| `OLHOVIVO_TOKEN` | Olho Vivo API token. Server only. Without it, stops show the scheduled frequency only. |
+| `OLHOVIVO_URL` | Optional. Olho Vivo base URL, for tests against a fake server. The default is `https://api.olhovivo.sptrans.com.br/v2.1`. |
 | `SUPABASE_DB_URL` | Postgres connection string for `gtfs:load`. Use the "Session pooler" string from Supabase → Connect. Local only, never in Vercel. |
 | `NEXT_PUBLIC_MAP_STYLE_URL` | Optional. Map style URL. The default is OpenFreeMap "liberty". |
 
 The secret keys must never get the `NEXT_PUBLIC_` prefix.
+
+## Live bus arrivals
+
+`/api/arrivals?stop=sp:<code>` reads `/Previsao/Parada` from Olho Vivo for a signed-in user. It keeps the login cookie, caches each stop for 20 s (failures for 15 s) and always answers 200 with a `state`: `live`, `not_covered`, `stale`, `upstream_down`, `auth_failed` or `unavailable` (no token). The stop sheet refreshes every 30 s while the page is visible. Any state other than `live` shows the scheduled frequency, with a banner except for `unavailable`.
+
+To turn it on when the token exists:
+
+1. Add `OLHOVIVO_TOKEN` to Vercel (Production) and deploy again.
+2. Add it to `.env.local` and run `npm run idmap:check -- --gtfs data/sptrans/gtfs.zip` on a weekday between 08:00 and 19:00. The arrivals join GTFS lines by the hypotheses H1 to H3, so a failed check means wrong or missing times.
+3. Add it as the `OLHOVIVO_TOKEN` repository secret. The weekly refresh then runs the same check.
 
 ## Invites
 

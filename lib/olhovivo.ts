@@ -45,11 +45,11 @@ export function cookieHeader(setCookies: string[]): string {
     .join("; ");
 }
 
-export function createOlhoVivo(token: string, fetchImpl: typeof fetch = fetch): OlhoVivo {
+export function createOlhoVivo(token: string, fetchImpl: typeof fetch = fetch, baseUrl = OLHO_VIVO_URL): OlhoVivo {
   let cookie = "";
 
   async function login(): Promise<void> {
-    const url = `${OLHO_VIVO_URL}/Login/Autenticar?token=${encodeURIComponent(token)}`;
+    const url = `${baseUrl}/Login/Autenticar?token=${encodeURIComponent(token)}`;
     const response = await fetchImpl(url, { method: "POST", signal: AbortSignal.timeout(TIMEOUT_MS) });
     const body = (await response.text()).trim();
     cookie = cookieHeader(response.headers.getSetCookie());
@@ -61,7 +61,7 @@ export function createOlhoVivo(token: string, fetchImpl: typeof fetch = fetch): 
 
   async function get<T>(path: string, params: Record<string, string | number> = {}): Promise<T> {
     const query = new URLSearchParams(Object.entries(params).map(([key, value]) => [key, String(value)]));
-    const url = `${OLHO_VIVO_URL}${path}${query.size > 0 ? `?${query}` : ""}`;
+    const url = `${baseUrl}${path}${query.size > 0 ? `?${query}` : ""}`;
     for (let attempt = 1; ; attempt++) {
       if (cookie === "") {
         await login();

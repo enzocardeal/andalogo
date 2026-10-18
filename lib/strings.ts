@@ -37,6 +37,11 @@ export const strings = {
     favoriteFailed: "Não foi possível salvar o favorito. Tente de novo.",
     showRoute: "Ver o trajeto da linha",
   },
+  arrivals: {
+    live: "Ao vivo",
+    noLiveData: "Sem dados ao vivo agora. Mostrando a frequência programada.",
+    noPrediction: "Sem previsão ao vivo",
+  },
   route: {
     close: "Fechar",
     failed: "Não foi possível carregar a linha. Tente de novo.",

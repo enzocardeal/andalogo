@@ -4,10 +4,12 @@ import { useEffect, useState, type ReactNode } from "react";
 import { StarIcon } from "@/components/bottom-nav";
 import { LineBadge } from "@/components/line-badge";
 import { LineSummary } from "@/components/line-summary";
+import { liveLineFor, sortByArrival, type Arrivals } from "@/lib/arrivals";
 import { SHEET_SHARE } from "@/lib/map-view";
 import { strings } from "@/lib/strings";
 import { createClient } from "@/lib/supabase/client";
 import type { StopDetails } from "@/lib/transit";
+import { useArrivals } from "@/lib/use-arrivals";
 
 type Loaded = { stopId: string; stop: StopDetails | null; failed: boolean; fetchedAt: Date };
 
@@ -42,6 +44,8 @@ export function StopSheet({ stopId, onClose, onRoute, onFavoriteChange }: StopSh
 
   const current = loaded?.stopId === stopId ? loaded : null;
   const stop = current?.stop ?? null;
+  const arrivals = useArrivals(stop && stop.mode === "bus" && stop.id.startsWith("sp:") ? stop.id : null);
+  const live = arrivals?.state === "live";
 
   async function toggleFavorite() {
     if (!stop) {
@@ -69,7 +73,8 @@ export function StopSheet({ stopId, onClose, onRoute, onFavoriteChange }: StopSh
           <h2 className="text-lg font-semibold">{stop?.name ?? strings.loading}</h2>
           {stop && (
             <p className="text-sm text-neutral-500 dark:text-neutral-400">
-              {strings.modes[stop.mode]} · {stop.mode === "emtu" ? strings.stop.timetable : strings.stop.scheduled}
+              {strings.modes[stop.mode]} ·{" "}
+              {live ? strings.arrivals.live : stop.mode === "emtu" ? strings.stop.timetable : strings.stop.scheduled}
             </p>
           )}
         </div>
@@ -96,13 +101,20 @@ export function StopSheet({ stopId, onClose, onRoute, onFavoriteChange }: StopSh
             {strings.stop.favoriteFailed}
           </p>
         )}
-        <StopBody loaded={current} onRoute={onRoute} />
+        {arrivals && !live && arrivals.state !== "unavailable" && (
+          <p className="mb-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">
+            {strings.arrivals.noLiveData}
+          </p>
+        )}
+        <StopBody loaded={current} arrivals={arrivals} onRoute={onRoute} />
       </div>
     </Sheet>
   );
 }
 
-function StopBody({ loaded, onRoute }: { loaded: Loaded | null; onRoute: StopSheetProps["onRoute"] }) {
+type StopBodyProps = { loaded: Loaded | null; arrivals: Arrivals | null; onRoute: StopSheetProps["onRoute"] };
+
+function StopBody({ loaded, arrivals, onRoute }: StopBodyProps) {
   if (!loaded) {
     return null;
   }
@@ -117,7 +129,7 @@ function StopBody({ loaded, onRoute }: { loaded: Loaded | null; onRoute: StopShe
   }
   return (
     <ul className="flex flex-col divide-y divide-neutral-100 dark:divide-neutral-800">
-      {loaded.stop.lines.map((line) => (
+      {sortByArrival(loaded.stop.lines, arrivals).map((line) => (
         <li key={`${line.route_id}:${line.direction_id}`}>
           <button
             type="button"
@@ -126,7 +138,11 @@ function StopBody({ loaded, onRoute }: { loaded: Loaded | null; onRoute: StopShe
             className="flex min-h-14 w-full items-center gap-3 py-2 text-left"
           >
             <LineBadge line={line} />
-            <LineSummary line={line} now={loaded.fetchedAt} />
+            <LineSummary
+              line={line}
+              now={loaded.fetchedAt}
+              live={liveLineFor(arrivals, line.route_id, line.direction_id)}
+            />
           </button>
         </li>
       ))}
