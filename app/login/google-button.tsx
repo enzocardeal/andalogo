@@ -30,12 +30,12 @@ export function GoogleButton() {
         type="button"
         onClick={signIn}
         disabled={pending}
-        className="min-h-11 rounded-lg bg-neutral-900 px-4 font-medium text-white disabled:opacity-60"
+        className="min-h-11 rounded-lg bg-neutral-900 dark:bg-neutral-100 px-4 font-medium text-white dark:text-neutral-900 disabled:opacity-60"
       >
         {pending ? strings.login.redirecting : strings.login.google}
       </button>
       {failed && (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-red-700 dark:text-red-400">
           {strings.login.failed}
         </p>
       )}

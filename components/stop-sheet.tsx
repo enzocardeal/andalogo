@@ -14,9 +14,10 @@ type StopSheetProps = {
   stopId: string;
   onClose: () => void;
   onRoute: (routeId: string, dir: number) => void;
+  onFavoriteChange: (stopId: string, favorite: boolean) => void;
 };
 
-export function StopSheet({ stopId, onClose, onRoute }: StopSheetProps) {
+export function StopSheet({ stopId, onClose, onRoute, onFavoriteChange }: StopSheetProps) {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [favoriteFailed, setFavoriteFailed] = useState(false);
 
@@ -48,6 +49,7 @@ export function StopSheet({ stopId, onClose, onRoute }: StopSheetProps) {
     const favorite = !stop.favorite;
     setLoaded({ stopId, stop: { ...stop, favorite }, failed: false });
     setFavoriteFailed(false);
+    onFavoriteChange(stop.id, favorite);
     const { error } = await createClient().rpc(favorite ? "add_favorite" : "remove_favorite", {
       p_stop_id: stop.id,
     });
@@ -55,6 +57,7 @@ export function StopSheet({ stopId, onClose, onRoute }: StopSheetProps) {
       console.error("favorite failed:", error.message);
       setLoaded({ stopId, stop, failed: false });
       setFavoriteFailed(true);
+      onFavoriteChange(stop.id, !favorite);
     }
   }
 
@@ -64,7 +67,7 @@ export function StopSheet({ stopId, onClose, onRoute }: StopSheetProps) {
         <div className="flex min-w-0 flex-col">
           <h2 className="text-lg font-semibold">{stop?.name ?? strings.loading}</h2>
           {stop && (
-            <p className="text-sm text-neutral-500">
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">
               {strings.modes[stop.mode]} · {strings.stop.scheduled}
             </p>
           )}
@@ -77,7 +80,7 @@ export function StopSheet({ stopId, onClose, onRoute }: StopSheetProps) {
               aria-pressed={stop.favorite}
               aria-label={stop.favorite ? strings.stop.removeFavorite : strings.stop.addFavorite}
               className={`flex size-11 items-center justify-center rounded-full ${
-                stop.favorite ? "text-amber-500" : "text-neutral-500"
+                stop.favorite ? "text-amber-500" : "text-neutral-500 dark:text-neutral-400"
               }`}
             >
               <StarIcon filled={stop.favorite} />
@@ -88,7 +91,7 @@ export function StopSheet({ stopId, onClose, onRoute }: StopSheetProps) {
       </header>
       <div className="overflow-y-auto px-4 pb-4">
         {favoriteFailed && (
-          <p role="alert" className="mb-2 text-sm text-red-700">
+          <p role="alert" className="mb-2 text-sm text-red-700 dark:text-red-400">
             {strings.stop.favoriteFailed}
           </p>
         )}
@@ -103,16 +106,16 @@ function StopBody({ loaded, onRoute }: { loaded: Loaded | null; onRoute: StopShe
     return null;
   }
   if (loaded.failed) {
-    return <p role="alert" className="text-sm text-red-700">{strings.stop.failed}</p>;
+    return <p role="alert" className="text-sm text-red-700 dark:text-red-400">{strings.stop.failed}</p>;
   }
   if (!loaded.stop) {
-    return <p className="text-sm text-neutral-600">{strings.stop.notFound}</p>;
+    return <p className="text-sm text-neutral-600 dark:text-neutral-400">{strings.stop.notFound}</p>;
   }
   if (loaded.stop.lines.length === 0) {
-    return <p className="text-sm text-neutral-600">{strings.stop.noLines}</p>;
+    return <p className="text-sm text-neutral-600 dark:text-neutral-400">{strings.stop.noLines}</p>;
   }
   return (
-    <ul className="flex flex-col divide-y divide-neutral-100">
+    <ul className="flex flex-col divide-y divide-neutral-100 dark:divide-neutral-800">
       {loaded.stop.lines.map((line) => (
         <li key={`${line.route_id}:${line.direction_id}`}>
           <button
@@ -124,7 +127,7 @@ function StopBody({ loaded, onRoute }: { loaded: Loaded | null; onRoute: StopShe
             <LineBadge line={line} />
             <span className="min-w-0 flex-1 truncate">{line.headsign || line.long_name}</span>
             <span
-              className={`shrink-0 text-sm tabular-nums ${line.headway_s === null ? "text-neutral-400" : "text-neutral-700"}`}
+              className={`shrink-0 text-sm tabular-nums ${line.headway_s === null ? "text-neutral-400 dark:text-neutral-500" : "text-neutral-700 dark:text-neutral-300"}`}
             >
               {headwayLabel(line.headway_s)}
             </span>
@@ -139,7 +142,7 @@ export function Sheet({ children }: { children: ReactNode }) {
   return (
     <section
       aria-live="polite"
-      className="absolute inset-x-0 bottom-0 z-20 flex max-h-[60%] flex-col rounded-t-2xl bg-white shadow-[0_-4px_16px_rgba(0,0,0,0.15)]"
+      className="absolute inset-x-0 bottom-0 z-20 flex max-h-[60%] flex-col rounded-t-2xl bg-white dark:bg-neutral-900 shadow-[0_-4px_16px_rgba(0,0,0,0.15)]"
     >
       {children}
     </section>
@@ -152,7 +155,7 @@ export function CloseButton({ label, onClick }: { label: string; onClick: () => 
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="flex size-11 shrink-0 items-center justify-center rounded-full text-2xl text-neutral-500"
+      className="flex size-11 shrink-0 items-center justify-center rounded-full text-2xl text-neutral-500 dark:text-neutral-400"
     >
       ×
     </button>

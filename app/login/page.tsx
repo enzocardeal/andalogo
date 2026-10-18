@@ -9,7 +9,7 @@ export default function LoginPage({ searchParams }: PageProps<"/login">) {
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center gap-6 px-4">
       <div className="flex flex-col gap-2">
         <h1 className="text-3xl font-semibold">{strings.app.name}</h1>
-        <p className="text-neutral-600">{strings.app.description}</p>
+        <p className="text-neutral-600 dark:text-neutral-400">{strings.app.description}</p>
       </div>
       <Suspense>
         <LoginError searchParams={searchParams} />
@@ -26,13 +26,13 @@ async function LoginError({ searchParams }: Pick<PageProps<"/login">, "searchPar
   }
   if (error === "auth") {
     return (
-      <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">
+      <p role="alert" className="rounded-lg bg-red-50 dark:bg-red-950 p-3 text-sm text-red-800 dark:text-red-200">
         {strings.login.failed}
       </p>
     );
   }
   return (
-    <div role="alert" className="flex flex-col gap-1 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+    <div role="alert" className="flex flex-col gap-1 rounded-lg bg-amber-50 dark:bg-amber-950 p-3 text-sm text-amber-900 dark:text-amber-200">
       <p>{strings.login.inviteRequired}</p>
       <Link href="/invite" className="font-medium underline">
         {strings.login.inviteLink}

@@ -32,7 +32,7 @@ export function BottomNavBar({ current }: { current: Section | null }) {
   return (
     <nav
       aria-label={strings.nav.label}
-      className="sticky bottom-0 z-40 border-t border-neutral-200 bg-white pb-[env(safe-area-inset-bottom)]"
+      className="sticky bottom-0 z-40 border-t border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 pb-[env(safe-area-inset-bottom)]"
     >
       <ul className="mx-auto flex h-(--bottom-nav-height) max-w-md">
         {items.map((item) => (
@@ -41,7 +41,7 @@ export function BottomNavBar({ current }: { current: Section | null }) {
               href={item.href}
               aria-current={item.active ? "page" : undefined}
               className={`flex flex-1 flex-col items-center justify-center gap-0.5 text-xs font-medium ${
-                item.active ? "text-neutral-900" : "text-neutral-500"
+                item.active ? "text-neutral-900 dark:text-neutral-100" : "text-neutral-500 dark:text-neutral-400"
               }`}
             >
               {item.icon}

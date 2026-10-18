@@ -1,7 +1,7 @@
 import { strings } from "@/lib/strings";
 
 export function Skeleton({ className }: { className: string }) {
-  return <span aria-hidden="true" className={`block animate-pulse rounded-lg bg-neutral-200 ${className}`} />;
+  return <span aria-hidden="true" className={`block animate-pulse rounded-lg bg-neutral-200 dark:bg-neutral-800 ${className}`} />;
 }
 
 export function ListSkeleton({ rows = 3 }: { rows?: number }) {

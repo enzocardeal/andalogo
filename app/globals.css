@@ -2,6 +2,24 @@
 
 :root {
   --bottom-nav-height: 3.5rem;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  .maplibregl-map .maplibregl-ctrl-group,
+  .maplibregl-map .maplibregl-ctrl-attrib.maplibregl-compact {
+    background-color: #171717;
+    color: #d4d4d4;
+  }
+
+  .maplibregl-map .maplibregl-ctrl-attrib a {
+    color: #d4d4d4;
+  }
+
+  .maplibregl-map .maplibregl-ctrl button .maplibregl-ctrl-icon,
+  .maplibregl-map .maplibregl-ctrl-attrib-button {
+    filter: invert(1) hue-rotate(180deg);
+  }
 }
 
 @layer base {

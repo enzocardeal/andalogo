@@ -36,7 +36,7 @@ export function InviteForm() {
 
   if (result?.ok) {
     return (
-      <div role="status" className="flex flex-col gap-3 rounded-lg bg-green-50 p-3 text-green-900">
+      <div role="status" className="flex flex-col gap-3 rounded-lg bg-green-50 dark:bg-green-950 p-3 text-green-900 dark:text-green-200">
         <p>{result.message}</p>
         <Link href="/login" className="font-medium underline">
           {strings.invite.goToLogin}
@@ -55,7 +55,7 @@ export function InviteForm() {
           autoComplete="off"
           autoCapitalize="off"
           spellCheck={false}
-          className="min-h-11 rounded-lg border border-neutral-300 px-3"
+          className="min-h-11 rounded-lg border border-neutral-300 dark:border-neutral-700 px-3"
         />
       </label>
       <label className="flex flex-col gap-1">
@@ -66,18 +66,18 @@ export function InviteForm() {
           required
           autoComplete="email"
           inputMode="email"
-          className="min-h-11 rounded-lg border border-neutral-300 px-3"
+          className="min-h-11 rounded-lg border border-neutral-300 dark:border-neutral-700 px-3"
         />
       </label>
       {result && (
-        <p role="alert" className="text-sm text-red-700">
+        <p role="alert" className="text-sm text-red-700 dark:text-red-400">
           {result.message}
         </p>
       )}
       <button
         type="submit"
         disabled={pending}
-        className="min-h-11 rounded-lg bg-neutral-900 px-4 font-medium text-white disabled:opacity-60"
+        className="min-h-11 rounded-lg bg-neutral-900 dark:bg-neutral-100 px-4 font-medium text-white dark:text-neutral-900 disabled:opacity-60"
       >
         {pending ? strings.invite.sending : strings.invite.submit}
       </button>

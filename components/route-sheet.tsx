@@ -26,7 +26,7 @@ export function RouteSheet({ route, failed, dir, onDirection, onStop, onClose }:
           {route ? (
             <span className="flex min-w-0 items-center gap-2">
               <LineBadge line={route} />
-              <span className="truncate text-sm text-neutral-600">{route.long_name}</span>
+              <span className="truncate text-sm text-neutral-600 dark:text-neutral-400">{route.long_name}</span>
             </span>
           ) : (
             <h2 className="text-lg font-semibold">{failed ? strings.route.failed : strings.loading}</h2>
@@ -44,15 +44,15 @@ export function RouteSheet({ route, failed, dir, onDirection, onStop, onClose }:
           <button
             type="button"
             onClick={() => onDirection(other.direction_id)}
-            className="min-h-11 self-start rounded-lg border border-neutral-300 px-4 text-sm font-medium"
+            className="min-h-11 self-start rounded-lg border border-neutral-300 dark:border-neutral-700 px-4 text-sm font-medium"
           >
             ⇄ {strings.route.switchDirection}
           </button>
         )}
-        {route && !pattern && <p className="text-sm text-neutral-600">{strings.route.notFound}</p>}
+        {route && !pattern && <p className="text-sm text-neutral-600 dark:text-neutral-400">{strings.route.notFound}</p>}
         {pattern && (
           <>
-            <p className="text-sm text-neutral-500">
+            <p className="text-sm text-neutral-500 dark:text-neutral-400">
               {pattern.stops.length} {strings.route.stops}
             </p>
             <ol className="flex flex-col">
@@ -65,7 +65,7 @@ export function RouteSheet({ route, failed, dir, onDirection, onStop, onClose }:
                   >
                     <span
                       aria-hidden="true"
-                      className="size-3 shrink-0 rounded-full border-2 bg-white"
+                      className="size-3 shrink-0 rounded-full border-2 bg-white dark:bg-neutral-900"
                       style={{ borderColor: route?.color ?? DEFAULT_ROUTE_COLOR }}
                     />
                     <span className="truncate">{stop.name}</span>

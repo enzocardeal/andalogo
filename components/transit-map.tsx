@@ -1,50 +1,57 @@
 "use client";
 
 import "maplibre-gl/dist/maplibre-gl.css";
-import type { GeoJSONSource, Map as MapLibreMap } from "maplibre-gl";
+import type { Map as MapLibreMap, StyleSpecification } from "maplibre-gl";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MapSearch } from "@/components/map-search";
 import { RouteSheet } from "@/components/route-sheet";
 import { StopSheet } from "@/components/stop-sheet";
 import { INITIAL_ZOOM, MAP_STYLE_URL, MAP_WORKER_PATH, SAO_PAULO_CENTER } from "@/lib/map";
-import {
-  loadMapStops,
-  ROUTE_SOURCE,
-  ROUTE_STOPS_LAYER,
-  routeLayers,
-  SELECTED_LAYER,
-  STOP_LAYERS,
-  STOPS_SOURCE,
-  stopLayers,
-  stopsSource,
-} from "@/lib/map-stops";
+import { createMapController, type MapController } from "@/lib/map-controller";
+import { CLICKABLE_LAYERS, EMPTY_COLLECTION } from "@/lib/map-layers";
+import { loadFavoriteIds, loadMapStops } from "@/lib/map-stops";
+import { transitStyle } from "@/lib/map-style";
 import { mapHref, parseMapView, routeGeoJSON, type MapView } from "@/lib/map-view";
 import type { MapStop } from "@/lib/stops-file";
 import { strings } from "@/lib/strings";
 import { createClient } from "@/lib/supabase/client";
 import type { RouteDetails } from "@/lib/transit";
+import { useColorScheme } from "@/lib/use-color-scheme";
 
 type MapError = "map" | "stops";
 
 type LoadedRoute = { routeId: string; route: RouteDetails | null; failed: boolean };
 
 const STOP_ZOOM = 16;
-const ROUTE_PADDING = { top: 80, bottom: 260, left: 40, right: 40 };
+const SHEET_SHARE = 0.6;
+
+async function loadBaseStyle(): Promise<StyleSpecification> {
+  const response = await fetch(MAP_STYLE_URL);
+  if (!response.ok) {
+    throw new Error(`map style returned ${response.status}`);
+  }
+  return response.json();
+}
 
 export function TransitMap() {
+  const scheme = useColorScheme();
   const view = parseMapView(useSearchParams());
   const viewRef = useRef(view);
+  const schemeRef = useRef(scheme);
   useEffect(() => {
     viewRef.current = view;
+    schemeRef.current = scheme;
   });
 
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  const controllerRef = useRef<MapController | null>(null);
   const stopsRef = useRef(new Map<string, MapStop>());
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<MapError | null>(null);
   const [loadedRoute, setLoadedRoute] = useState<LoadedRoute | null>(null);
+  const [favorites, setFavorites] = useState<ReadonlySet<string>>(new Set());
 
   const navigate = useCallback((next: Partial<MapView>) => {
     window.history.replaceState(null, "", mapHref({ ...viewRef.current, ...next }));
@@ -56,20 +63,33 @@ export function TransitMap() {
       (loaded) => ({ loaded, reason: null }),
       (reason: unknown) => ({ loaded: null, reason }),
     );
+    loadFavoriteIds()
+      .then((ids) => !cancelled && setFavorites(new Set(ids)))
+      .catch((reason: unknown) => console.error("favorites failed:", reason));
     const startsAtPlace = viewRef.current.stop !== null || viewRef.current.route !== null;
 
-    import("maplibre-gl")
-      .then((maplibregl) => {
+    Promise.all([import("maplibre-gl"), loadBaseStyle()])
+      .then(([maplibregl, base]) => {
         if (cancelled || !container.current) {
           return;
         }
         maplibregl.setWorkerUrl(`${MAP_WORKER_PATH}?v=${maplibregl.getVersion()}`);
         const map = new maplibregl.Map({
           container: container.current,
-          style: MAP_STYLE_URL,
+          style: transitStyle(base, schemeRef.current),
           center: SAO_PAULO_CENTER,
           zoom: INITIAL_ZOOM,
+          maxPitch: 0,
+          dragRotate: false,
+          pitchWithRotate: false,
+          touchPitch: false,
           attributionControl: { compact: true },
+        });
+        map.touchZoomRotate.disableRotation();
+        const controller = createMapController(map, base, schemeRef.current, () => {
+          if (!cancelled) {
+            setReady(true);
+          }
         });
         const geolocate = new maplibregl.GeolocateControl({
           positionOptions: { enableHighAccuracy: true },
@@ -80,27 +100,17 @@ export function TransitMap() {
           if (!startsAtPlace) {
             geolocate.trigger();
           }
-          stops.then(({ loaded, reason }) => {
-            if (loaded) {
-              stopsRef.current = new Map(loaded.map((stop) => [stop.id, stop]));
-              map.addSource(STOPS_SOURCE, stopsSource(loaded));
-              for (const layer of stopLayers()) {
-                map.addLayer(layer);
-              }
-            } else {
-              console.error("stops failed:", reason);
-              setError("stops");
-            }
-            map.addSource(ROUTE_SOURCE, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-            for (const { layer, before } of routeLayers()) {
-              map.addLayer(layer, map.getLayer(before) ? before : undefined);
-            }
-            if (!cancelled) {
-              setReady(true);
-            }
-          });
         });
-        map.on("click", [...STOP_LAYERS, ROUTE_STOPS_LAYER], (event) => {
+        stops.then(({ loaded, reason }) => {
+          if (loaded) {
+            stopsRef.current = new Map(loaded.map((stop) => [stop.id, stop]));
+          } else {
+            console.error("stops failed:", reason);
+            setError("stops");
+          }
+          controller.setStops(loaded);
+        });
+        map.on("click", CLICKABLE_LAYERS, (event) => {
           const id = event.features?.[0]?.properties.id;
           if (typeof id === "string") {
             navigate({ stop: id });
@@ -113,6 +123,7 @@ export function TransitMap() {
           }
         });
         mapRef.current = map;
+        controllerRef.current = controller;
       })
       .catch((reason: unknown) => {
         console.error("map failed:", reason);
@@ -123,17 +134,24 @@ export function TransitMap() {
       cancelled = true;
       mapRef.current?.remove();
       mapRef.current = null;
+      controllerRef.current = null;
     };
   }, [navigate]);
+
+  useEffect(() => {
+    controllerRef.current?.setScheme(scheme);
+  }, [ready, scheme]);
+
+  useEffect(() => {
+    controllerRef.current?.setFavorites(favorites);
+  }, [ready, favorites]);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map) {
       return;
     }
-    if (map.getLayer(SELECTED_LAYER)) {
-      map.setFilter(SELECTED_LAYER, ["==", ["get", "id"], view.stop ?? ""]);
-    }
+    controllerRef.current?.setSelected(view.stop);
     const stop = view.stop ? stopsRef.current.get(view.stop) : undefined;
     if (stop && !map.getBounds().contains([stop.lon, stop.lat])) {
       map.easeTo({ center: [stop.lon, stop.lat], zoom: Math.max(map.getZoom(), STOP_ZOOM) });
@@ -164,20 +182,34 @@ export function TransitMap() {
   const route = view.route && loadedRoute?.routeId === view.route ? loadedRoute : null;
 
   useEffect(() => {
-    const source = mapRef.current?.getSource<GeoJSONSource>(ROUTE_SOURCE);
-    if (!ready || !source) {
+    const controller = controllerRef.current;
+    if (!ready || !controller) {
       return;
     }
     if (!route?.route) {
-      source.setData({ type: "FeatureCollection", features: [] });
+      controller.setRoute(EMPTY_COLLECTION);
       return;
     }
     const { bounds, data } = routeGeoJSON(route.route, view.dir);
-    source.setData(data);
+    controller.setRoute(data);
     if (bounds) {
-      mapRef.current?.fitBounds(bounds, { padding: ROUTE_PADDING, maxZoom: STOP_ZOOM });
+      const height = mapRef.current?.getContainer().clientHeight ?? 0;
+      const padding = { top: 80, bottom: Math.round(height * SHEET_SHARE) + 16, left: 40, right: 40 };
+      mapRef.current?.fitBounds(bounds, { padding, maxZoom: STOP_ZOOM });
     }
   }, [ready, route, view.dir]);
+
+  function changeFavorite(stopId: string, favorite: boolean) {
+    setFavorites((current) => {
+      const next = new Set(current);
+      if (favorite) {
+        next.add(stopId);
+      } else {
+        next.delete(stopId);
+      }
+      return next;
+    });
+  }
 
   return (
     <>
@@ -188,7 +220,7 @@ export function TransitMap() {
       {error && (
         <p
           role="alert"
-          className="absolute inset-x-4 top-[calc(env(safe-area-inset-top)+4.5rem)] rounded-lg bg-red-50 p-3 text-sm text-red-800"
+          className="absolute inset-x-4 top-[calc(env(safe-area-inset-top)+4.5rem)] rounded-lg bg-red-50 dark:bg-red-950 p-3 text-sm text-red-800 dark:text-red-200"
         >
           {error === "map" ? strings.map.failed : strings.map.stopsFailed}
         </p>
@@ -198,6 +230,7 @@ export function TransitMap() {
           stopId={view.stop}
           onClose={() => navigate({ stop: null })}
           onRoute={(routeId, dir) => navigate({ route: routeId, dir, stop: null })}
+          onFavoriteChange={changeFavorite}
         />
       ) : (
         view.route && (
