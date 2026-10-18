@@ -62,6 +62,11 @@ function showLocationDot(maplibregl: typeof import("maplibre-gl"), map: MapLibre
   };
 }
 
+// A move without zoom ends the locate control's follow mode, so later GPS fixes stop recentering the map.
+function stopFollowing(map: MapLibreMap): void {
+  map.jumpTo({ center: map.getCenter() });
+}
+
 function isSheetEntry(): boolean {
   return (window.history.state as Record<string, unknown> | null)?.[SHEET_ENTRY] === true;
 }
@@ -252,6 +257,7 @@ export function TransitMap() {
     const visibleBottom = height * (1 - SHEET_SHARE);
     const { x, y } = map.project([stop.lon, stop.lat]);
     if (map.getZoom() < STOP_ZOOM || x < 0 || x > width || y < SEARCH_HEIGHT || y > visibleBottom) {
+      stopFollowing(map);
       map.easeTo({
         center: [stop.lon, stop.lat],
         zoom: Math.max(map.getZoom(), STOP_ZOOM),
@@ -321,6 +327,7 @@ export function TransitMap() {
         return x < 0 || x > width || y < SEARCH_HEIGHT || y > visibleBottom;
       });
       if (outside) {
+        stopFollowing(map);
         const lons = points.map(([lon]) => lon);
         const lats = points.map(([, lat]) => lat);
         map.fitBounds([Math.min(...lons), Math.min(...lats), Math.max(...lons), Math.max(...lats)], {
@@ -363,10 +370,12 @@ export function TransitMap() {
     }
     const { bounds, data } = routeGeoJSON(route.route, view.dir);
     controller.setRoute(data);
-    if (bounds && !view.stop) {
-      const height = mapRef.current?.getContainer().clientHeight ?? 0;
+    const map = mapRef.current;
+    if (bounds && !view.stop && map) {
+      const height = map.getContainer().clientHeight;
       const padding = { top: 80, bottom: Math.round(height * SHEET_SHARE) + 16, left: 40, right: 40 };
-      mapRef.current?.fitBounds(bounds, { padding, maxZoom: STOP_ZOOM });
+      stopFollowing(map);
+      map.fitBounds(bounds, { padding, maxZoom: STOP_ZOOM });
     }
   }, [ready, route, view.dir, view.stop]);
 
@@ -398,6 +407,7 @@ export function TransitMap() {
       return;
     }
     placeFramedRef.current = key;
+    stopFollowing(map);
     const { clientHeight: height } = map.getContainer();
     const visibleBottom = height * (1 - SHEET_SHARE);
     if (nearby.length === 0) {
