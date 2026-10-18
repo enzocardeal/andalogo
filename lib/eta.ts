@@ -3,10 +3,11 @@ import type { PositionLine, Positions } from "./olhovivo.ts";
 import { decodePolyline, type LatLon } from "./polyline.ts";
 
 const METERS_PER_DEGREE = 111_320;
-const MAX_OFF_ROUTE_M = 150;
+export const MAX_OFF_ROUTE_M = 150;
 const STOP_MAX_OFF_ROUTE_M = 200;
 const STOP_NEAR_M = 40;
-const TERMINAL_M = 300;
+export const TERMINAL_M = 300;
+const PRIOR_SAMPLES = 3;
 const MAX_POSITION_AGE_S = 300;
 const PASSED_S = 60;
 const MAX_ESTIMATE_S = 5400;
@@ -26,6 +27,8 @@ export type StopPattern = {
   stop_indexes: number[];
   run_time_s: number | null;
   circular: boolean;
+  paces?: number[] | null;
+  samples?: number[] | null;
 };
 
 export type PositionIndex = Map<string, PositionLine["vs"]>;
@@ -89,7 +92,34 @@ export function averagePace(pattern: Pick<StopPattern, "stop_offsets_m" | "run_t
   if (!pattern.run_time_s || length <= 0) {
     return DEFAULT_PACE_S_PER_M;
   }
-  return Math.max(MIN_PACE_S_PER_M, Math.min(MAX_PACE_S_PER_M, pattern.run_time_s / length));
+  return clampPace(pattern.run_time_s / length);
+}
+
+function clampPace(pace: number): number {
+  return Math.max(MIN_PACE_S_PER_M, Math.min(MAX_PACE_S_PER_M, pace));
+}
+
+// Each calibrated pace leans toward the line mean, and the line mean toward the GTFS average, until samples add up.
+export function segmentPaces(pattern: Omit<StopPattern, "route_id" | "direction_id" | "polyline" | "stop_indexes" | "circular">): {
+  paces: number[];
+  fallback: number;
+} {
+  const offsets = pattern.stop_offsets_m;
+  const lengths = offsets.slice(1).map((offset, k) => offset - offsets[k]);
+  const gtfs = averagePace(pattern);
+  const { paces, samples } = pattern;
+  if (!paces || !samples || paces.length !== lengths.length || samples.length !== lengths.length) {
+    return { paces: lengths.map(() => gtfs), fallback: gtfs };
+  }
+  const meters = lengths.reduce((sum, length, k) => sum + samples[k] * length, 0);
+  const seconds = lengths.reduce((sum, length, k) => sum + samples[k] * length * (paces[k] / 1000), 0);
+  const total = offsets.at(-1)! - offsets[0];
+  const weight = total > 0 ? meters / total : 0;
+  const line = meters > 0 ? clampPace((weight * (seconds / meters) + PRIOR_SAMPLES * gtfs) / (weight + PRIOR_SAMPLES)) : gtfs;
+  return {
+    paces: lengths.map((_, k) => clampPace((samples[k] * (paces[k] / 1000) + PRIOR_SAMPLES * line) / (samples[k] + PRIOR_SAMPLES))),
+    fallback: line,
+  };
 }
 
 export function travelSeconds(offsets: number[], paces: number[], fallback: number, fromM: number, toM: number): number {
@@ -109,8 +139,7 @@ export type Estimate = { p: string; seconds: number; accessible: boolean; lat: n
 export function estimateLine(pattern: StopPattern, vehicles: PositionLine["vs"], now: Date): Estimate[] {
   const route = measure(decodePolyline(pattern.polyline));
   const offsets = pattern.stop_offsets_m;
-  const pace = averagePace(pattern);
-  const paces = offsets.slice(1).map(() => pace);
+  const { paces, fallback: pace } = segmentPaces(pattern);
   const estimates: Estimate[] = [];
   for (const vehicle of vehicles) {
     const ageS = (now.getTime() - Date.parse(vehicle.ta)) / 1000;

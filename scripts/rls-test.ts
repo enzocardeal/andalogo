@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import postgres from "postgres";
+import { loadCalibrationPatterns, savePaces } from "../lib/eta-db.ts";
 import { buildFeed } from "../lib/gtfs/build.ts";
 import { activeSha256, replaceFeed } from "../lib/gtfs/db.ts";
 import { loginErrorFor } from "../lib/login-error.ts";
@@ -26,6 +27,7 @@ const REFERENCE_TABLES: Record<string, string> = {
   timetable_patterns: "route_id",
   timetable_stops: "pattern_id",
   timetable_trips: "pattern_id",
+  eta_paces: "route_id",
 };
 
 const stack: Stack = JSON.parse(
@@ -136,6 +138,7 @@ before(async () => {
 });
 
 after(async () => {
+  await sql`delete from public.eta_paces where route_id = ${busId}`;
   await sql`delete from public.stops where id in ${sql([stopId, squareId])}`;
   await sql`delete from public.routes where id in ${sql([busId, nightId, emtuId, emtu2Id])}`;
   await sql.end();
@@ -380,9 +383,28 @@ test("search finds lines by sign and stops by name, without accents", async () =
 test("get_stop_eta returns the SPTrans bus patterns that pass the stop", async () => {
   const patterns = ok(await member.client.rpc("get_stop_eta", { p_stop_id: stopId }), "get_stop_eta");
   assert.deepEqual(patterns, [
-    { route_id: busId, direction_id: 0, polyline: "_p~iF~ps|U", stop_offsets_m: [0, 500], stop_indexes: [1], run_time_s: 120, circular: true },
+    { route_id: busId, direction_id: 0, polyline: "_p~iF~ps|U", stop_offsets_m: [0, 500], stop_indexes: [1], run_time_s: 120, circular: true, paces: null, samples: null },
   ]);
   assert.deepEqual(ok(await member.client.rpc("get_stop_eta", { p_stop_id: squareId }), "get_stop_eta without stop_routes"), []);
+});
+
+test("savePaces merges calibration rows and get_stop_eta returns the paces of the current hour", async () => {
+  const [pattern] = (await loadCalibrationPatterns(sql)).filter((row) => row.route_id === busId);
+  assert.deepEqual([pattern.stop_offsets_m, pattern.circular], [[0, 500], true]);
+  const totals = { pattern, dayType: "weekday" as const, hour: 12, seconds: [150], meters: [500] };
+  assert.equal(await savePaces(sql, [totals]), 1);
+  assert.equal(await savePaces(sql, [totals]), 1);
+  const pacesAt = async (time: string) => {
+    const [line] = ok(await member.client.rpc("get_stop_eta", { p_stop_id: stopId, p_at: time }), `get_stop_eta at ${time}`) as {
+      paces: number[] | null;
+      samples: number[] | null;
+    }[];
+    return [line.paces, line.samples];
+  };
+  assert.deepEqual(await pacesAt("2026-10-19T12:30:00-03:00"), [[300], [2]]);
+  assert.deepEqual(await pacesAt("2026-10-19T13:30:00-03:00"), [null, null]);
+  await sql`update public.eta_paces set stops_key = 'old' where route_id = ${busId}`;
+  assert.deepEqual(await pacesAt("2026-10-19T12:30:00-03:00"), [null, null]);
 });
 
 test("anon cannot execute the favorite, route or search RPCs", async () => {

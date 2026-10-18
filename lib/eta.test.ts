@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { averagePace, circularDirections, estimateLine, estimateStop, indexPositions, measure, project, stopOffsets, travelSeconds, type StopPattern } from "./eta.ts";
+import {
+  averagePace,
+  circularDirections,
+  estimateLine,
+  estimateStop,
+  indexPositions,
+  measure,
+  project,
+  segmentPaces,
+  stopOffsets,
+  travelSeconds,
+  type StopPattern,
+} from "./eta.ts";
 import { encodePolyline, type LatLon } from "./polyline.ts";
 
 const NOW = new Date("2026-10-19T10:00:00-03:00");
@@ -64,6 +76,16 @@ test("averagePace and travelSeconds use segment paces and fall back to the avera
   assert.equal(averagePace({ stop_offsets_m: [0, 0], run_time_s: 600 }), 0.24);
   assert.equal(travelSeconds([0, 1000, 2000], [0.1, 0.2], 0.3, 500, 1500), 150);
   assert.equal(travelSeconds([100, 1100, 2100], [0.1, 0.2], 0.3, 0, 600), 80);
+});
+
+test("segmentPaces blends calibrated paces with the line mean and the GTFS average", () => {
+  const base = { stop_offsets_m: [0, 1000, 2000], run_time_s: 600 };
+  assert.deepEqual(segmentPaces(base), { paces: [0.3, 0.3], fallback: 0.3 });
+  assert.deepEqual(segmentPaces({ ...base, paces: [120], samples: [50] }), { paces: [0.3, 0.3], fallback: 0.3 });
+  const { paces, fallback } = segmentPaces({ ...base, paces: [120, 0], samples: [50, 0] });
+  const line = (25 * 0.12 + 3 * 0.3) / 28;
+  assert.equal(fallback.toFixed(6), line.toFixed(6));
+  assert.deepEqual(paces.map((pace) => pace.toFixed(6)), [((50 * 0.12 + 3 * line) / 53).toFixed(6), line.toFixed(6)]);
 });
 
 test("estimateLine keeps fresh buses on the route before the stop", () => {
