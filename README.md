@@ -6,7 +6,7 @@ Stack: Next.js on Vercel (`gru1`), Supabase (`sa-east-1`), MapLibre GL JS with O
 
 ## Status
 
-Milestones M0, M1, M3 and M4: Google login with invite, all SPTrans stops and stations on the map with the scheduled frequency per line, favorite stops as the start screen, line routes, and search. M2 (live arrivals) waits for the Olho Vivo token.
+Milestones M0, M1, M3 and M4: Google login with invite, all SPTrans stops and stations on the map with the scheduled frequency per line, the map as the start screen, favorite stops, line routes, and search. M2 (live arrivals) waits for the Olho Vivo token.
 
 | Milestone | Content |
 |---|---|

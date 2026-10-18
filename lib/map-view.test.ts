@@ -25,8 +25,8 @@ const ROUTE: RouteDetails = {
 };
 
 test("mapHref and parseMapView keep the stop, the route and the direction", () => {
-  assert.equal(mapHref({ stop: null, route: null, dir: 0 }), "/map");
-  assert.equal(mapHref({ stop: "sp:18848", route: null, dir: 1 }), "/map?stop=sp%3A18848");
+  assert.equal(mapHref({ stop: null, route: null, dir: 0 }), "/");
+  assert.equal(mapHref({ stop: "sp:18848", route: null, dir: 1 }), "/?stop=sp%3A18848");
   const href = mapHref({ stop: "sp:1", route: "sp:METRÔ L1", dir: 1 });
   assert.deepEqual(parseMapView(new URL(href, "https://x").searchParams), { stop: "sp:1", route: "sp:METRÔ L1", dir: 1 });
   assert.deepEqual(parseMapView(new URLSearchParams("dir=7")), { stop: null, route: null, dir: 0 });

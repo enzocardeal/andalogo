@@ -25,6 +25,7 @@ type LoadedRoute = { routeId: string; route: RouteDetails | null; failed: boolea
 
 const STOP_ZOOM = 16;
 const SHEET_SHARE = 0.6;
+const SEARCH_HEIGHT = 72;
 
 async function loadBaseStyle(): Promise<StyleSpecification> {
   const response = await fetch(MAP_STYLE_URL);
@@ -135,6 +136,7 @@ export function TransitMap() {
       mapRef.current?.remove();
       mapRef.current = null;
       controllerRef.current = null;
+      setReady(false);
     };
   }, [navigate]);
 
@@ -153,8 +155,18 @@ export function TransitMap() {
     }
     controllerRef.current?.setSelected(view.stop);
     const stop = view.stop ? stopsRef.current.get(view.stop) : undefined;
-    if (stop && !map.getBounds().contains([stop.lon, stop.lat])) {
-      map.easeTo({ center: [stop.lon, stop.lat], zoom: Math.max(map.getZoom(), STOP_ZOOM) });
+    if (!stop) {
+      return;
+    }
+    const { clientWidth: width, clientHeight: height } = map.getContainer();
+    const visibleBottom = height * (1 - SHEET_SHARE);
+    const { x, y } = map.project([stop.lon, stop.lat]);
+    if (map.getZoom() < STOP_ZOOM || x < 0 || x > width || y < SEARCH_HEIGHT || y > visibleBottom) {
+      map.easeTo({
+        center: [stop.lon, stop.lat],
+        zoom: Math.max(map.getZoom(), STOP_ZOOM),
+        offset: [0, (SEARCH_HEIGHT + visibleBottom) / 2 - height / 2],
+      });
     }
   }, [ready, view.stop]);
 

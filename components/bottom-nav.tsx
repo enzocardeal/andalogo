@@ -18,15 +18,15 @@ export function BottomNav() {
 
 function sectionOf(pathname: string): Section | null {
   if (pathname === "/") {
-    return "favorites";
+    return "map";
   }
-  return pathname === "/map" ? "map" : null;
+  return pathname === "/favorites" ? "favorites" : null;
 }
 
 export function BottomNavBar({ current }: { current: Section | null }) {
   const items: NavItem[] = [
-    { href: "/", label: strings.nav.favorites, icon: <StarIcon />, active: current === "favorites" },
-    { href: "/map", label: strings.nav.map, icon: <MapIcon />, active: current === "map" },
+    { href: "/", label: strings.nav.map, icon: <MapIcon />, active: current === "map" },
+    { href: "/favorites", label: strings.nav.favorites, icon: <StarIcon />, active: current === "favorites" },
   ];
 
   return (

@@ -15,7 +15,7 @@ export function mapHref(view: MapView): string {
     params.set("dir", String(view.dir));
   }
   const query = params.toString();
-  return query ? `/map?${query}` : "/map";
+  return query ? `/?${query}` : "/";
 }
 
 export function parseMapView(params: { get(name: string): string | null }): MapView {
