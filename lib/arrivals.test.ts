@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { liveLineFor, minutesUntil, sortByArrival, stopCode, toArrivals } from "./arrivals.ts";
+import { liveLineFor, minutesUntil, nextBuses, sortByArrival, stopCode, toArrivals } from "./arrivals.ts";
 import type { StopPrediction, Vehicle } from "./olhovivo.ts";
 
 const NOW = new Date("2026-10-19T10:00:30-03:00");
@@ -10,6 +10,8 @@ const OLD = "2026-10-19T12:40:00Z";
 function vehicle(t: string, ta = FRESH, a = true): Vehicle {
   return { p: "11111", t, a, ta, py: -23.55, px: -46.63 };
 }
+
+const AT = { lat: -23.55, lon: -46.63 };
 
 function prediction(hr: string, lines: { c: string; sl: number; vs: Vehicle[] }[] | null): StopPrediction {
   return {
@@ -53,10 +55,10 @@ test("toArrivals keeps up to four fresh vehicles per line, soonest first", () =>
         routeId: "sp:8000-10",
         directionId: 1,
         vehicles: [
-          { minutes: 3, accessible: false },
-          { minutes: 9, accessible: true },
-          { minutes: 12, accessible: true },
-          { minutes: 20, accessible: true },
+          { minutes: 3, accessible: false, ...AT },
+          { minutes: 9, accessible: true, ...AT },
+          { minutes: 12, accessible: true, ...AT },
+          { minutes: 20, accessible: true, ...AT },
         ],
       },
       { routeId: "sp:1012-10", directionId: 0, vehicles: [] },
@@ -87,8 +89,8 @@ test("liveLineFor and sortByArrival put lines with the soonest live vehicle firs
   const arrivals = {
     state: "live" as const,
     lines: [
-      { routeId: "sp:B", directionId: 0, vehicles: [{ minutes: 9, accessible: true }] },
-      { routeId: "sp:C", directionId: 1, vehicles: [{ minutes: 2, accessible: true }] },
+      { routeId: "sp:B", directionId: 0, vehicles: [{ minutes: 9, accessible: true, ...AT }] },
+      { routeId: "sp:C", directionId: 1, vehicles: [{ minutes: 2, accessible: true, ...AT }] },
     ],
   };
   const lines = [
@@ -101,4 +103,17 @@ test("liveLineFor and sortByArrival put lines with the soonest live vehicle firs
   assert.deepEqual(liveLineFor(arrivals, "sp:A", 0), { routeId: "sp:A", directionId: 0, vehicles: [] });
   assert.equal(liveLineFor({ state: "upstream_down", lines: [] }, "sp:B", 0), null);
   assert.deepEqual(sortByArrival(lines, null), lines);
+});
+
+test("nextBuses picks the soonest located buses across lines", () => {
+  const arrivals = {
+    state: "live" as const,
+    lines: [
+      { routeId: "sp:A", directionId: 0, vehicles: [{ minutes: 9, accessible: true, ...AT }, { minutes: 20, accessible: true, ...AT }] },
+      { routeId: "sp:B", directionId: 1, vehicles: [{ minutes: 2, accessible: false, ...AT }] },
+    ],
+  };
+  assert.deepEqual(nextBuses(arrivals, 2).map((bus) => [bus.routeId, bus.minutes]), [["sp:B", 2], ["sp:A", 9]]);
+  assert.deepEqual(nextBuses({ state: "stale", lines: [] }, 2), []);
+  assert.deepEqual(nextBuses(null, 2), []);
 });

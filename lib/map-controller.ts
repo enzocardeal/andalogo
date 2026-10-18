@@ -5,11 +5,10 @@ import {
   drawStopSign,
   EMPTY_COLLECTION,
   FAVORITE_IMAGE,
-  favoriteFilters,
   overlayLayers,
   ROUTE_SOURCE,
-  selectedFilters,
   signStyles,
+  stopFilters,
   STOPS_SOURCE,
   stopsSource,
 } from "./map-layers.ts";
@@ -75,7 +74,7 @@ export function createMapController(
       addOverlays();
       onReady();
     }
-    for (const [layer, filter] of Object.entries({ ...selectedFilters(selected), ...favoriteFilters(favorites) })) {
+    for (const [layer, filter] of Object.entries(stopFilters(selected, favorites))) {
       map.setFilter(layer, filter);
     }
   }

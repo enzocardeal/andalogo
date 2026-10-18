@@ -9,6 +9,7 @@ import type { MapStop } from "./stops-file.ts";
 
 export const STOPS_SOURCE = "stops";
 export const ROUTE_SOURCE = "route";
+export const BUS_STOPS_LAYER = "bus-stops";
 export const SELECTED_LAYER = "selected-stop";
 export const SELECTED_SIGN_LAYER = "selected-sign";
 export const FAVORITE_LAYER = "favorite-stops";
@@ -17,7 +18,7 @@ export const FAVORITE_BADGE_LAYER = "favorite-badges";
 export const FAVORITE_IMAGE = "favorite-star";
 export const CLICKABLE_LAYERS = [
   "rail-stations",
-  "bus-stops",
+  BUS_STOPS_LAYER,
   "route-stops",
   FAVORITE_LAYER,
   FAVORITE_SIGN_LAYER,
@@ -98,19 +99,16 @@ function idIn(stopIds: Iterable<string>): ExpressionSpecification {
   return ["in", ["get", "id"], ["literal", [...stopIds]]];
 }
 
-export function selectedFilters(stopId: string | null): Record<string, FilterSpecification> {
+export function stopFilters(selected: string | null, favorites: Iterable<string>): Record<string, FilterSpecification> {
+  const ids = idIn(favorites);
+  const notSelected: ExpressionSpecification = ["!", idIs(selected)];
   return {
-    [SELECTED_LAYER]: ["all", idIs(stopId), IS_RAIL],
-    [SELECTED_SIGN_LAYER]: ["all", idIs(stopId), IS_SIGN],
-  };
-}
-
-export function favoriteFilters(stopIds: Iterable<string>): Record<string, FilterSpecification> {
-  const ids = [...stopIds];
-  return {
-    [FAVORITE_LAYER]: ["all", idIn(ids), IS_RAIL],
-    [FAVORITE_SIGN_LAYER]: ["all", idIn(ids), IS_SIGN],
-    [FAVORITE_BADGE_LAYER]: idIn(ids),
+    [BUS_STOPS_LAYER]: ["all", IS_SIGN, notSelected],
+    [FAVORITE_LAYER]: ["all", ids, IS_RAIL],
+    [FAVORITE_SIGN_LAYER]: ["all", ids, IS_SIGN, notSelected],
+    [FAVORITE_BADGE_LAYER]: ids,
+    [SELECTED_LAYER]: ["all", idIs(selected), IS_RAIL],
+    [SELECTED_SIGN_LAYER]: ["all", idIs(selected), IS_SIGN],
   };
 }
 
@@ -167,11 +165,11 @@ export function overlayLayers(scheme: Scheme): LayerSpecification[] {
       },
     },
     {
-      id: "bus-stops",
+      id: BUS_STOPS_LAYER,
       type: "symbol",
       source: STOPS_SOURCE,
       minzoom: BUS_MIN_ZOOM,
-      filter: IS_SIGN,
+      filter: stopFilters(null, [])[BUS_STOPS_LAYER],
       layout: { ...signLayout, "icon-size": ["interpolate", ["linear"], ["zoom"], 15, 0.75, 18, 1] },
     },
     {
@@ -179,7 +177,7 @@ export function overlayLayers(scheme: Scheme): LayerSpecification[] {
       type: "circle",
       source: STOPS_SOURCE,
       minzoom: FAVORITE_MIN_ZOOM,
-      filter: favoriteFilters([])[FAVORITE_LAYER],
+      filter: stopFilters(null, [])[FAVORITE_LAYER],
       paint: { ...railPaint, "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, 4, 15, 8] },
     },
     {
@@ -187,7 +185,7 @@ export function overlayLayers(scheme: Scheme): LayerSpecification[] {
       type: "symbol",
       source: STOPS_SOURCE,
       minzoom: FAVORITE_MIN_ZOOM,
-      filter: favoriteFilters([])[FAVORITE_SIGN_LAYER],
+      filter: stopFilters(null, [])[FAVORITE_SIGN_LAYER],
       layout: signLayout,
     },
     {
@@ -195,7 +193,7 @@ export function overlayLayers(scheme: Scheme): LayerSpecification[] {
       type: "symbol",
       source: STOPS_SOURCE,
       minzoom: FAVORITE_MIN_ZOOM,
-      filter: favoriteFilters([])[FAVORITE_BADGE_LAYER],
+      filter: stopFilters(null, [])[FAVORITE_BADGE_LAYER],
       layout: {
         "icon-image": FAVORITE_IMAGE,
         "icon-anchor": "bottom-left",
@@ -223,7 +221,7 @@ export function overlayLayers(scheme: Scheme): LayerSpecification[] {
       id: SELECTED_LAYER,
       type: "circle",
       source: STOPS_SOURCE,
-      filter: selectedFilters(null)[SELECTED_LAYER],
+      filter: stopFilters(null, [])[SELECTED_LAYER],
       paint: {
         "circle-radius": 11,
         "circle-opacity": 0,
@@ -235,7 +233,7 @@ export function overlayLayers(scheme: Scheme): LayerSpecification[] {
       id: SELECTED_SIGN_LAYER,
       type: "symbol",
       source: STOPS_SOURCE,
-      filter: selectedFilters(null)[SELECTED_SIGN_LAYER],
+      filter: stopFilters(null, [])[SELECTED_SIGN_LAYER],
       layout: { ...signLayout, "icon-image": signImage(true) },
     },
   ];

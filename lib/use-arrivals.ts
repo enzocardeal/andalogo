@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Arrivals } from "./arrivals.ts";
 
-const REFRESH_MS = 30_000;
+const REFRESH_MS = 15_000;
 const FAILED: Arrivals = { state: "upstream_down", lines: [] };
 
 export function useArrivals(stopId: string | null): Arrivals | null {

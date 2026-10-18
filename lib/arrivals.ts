@@ -2,7 +2,7 @@ import type { StopPrediction } from "./olhovivo.ts";
 
 export type ArrivalState = "live" | "not_covered" | "stale" | "upstream_down" | "auth_failed" | "unavailable";
 
-export type LiveVehicle = { minutes: number; accessible: boolean };
+export type LiveVehicle = { minutes: number; accessible: boolean; lat: number; lon: number };
 
 export type LiveLine = { routeId: string; directionId: number; vehicles: LiveVehicle[] };
 
@@ -60,7 +60,12 @@ export function toArrivals(prediction: StopPrediction, now: Date): Arrivals {
     directionId: line.sl - 1,
     vehicles: line.vs
       .filter((vehicle) => isFresh(vehicle.ta, now))
-      .map((vehicle) => ({ minutes: minutesUntil(vehicle.t, prediction.hr), accessible: vehicle.a }))
+      .map((vehicle) => ({
+        minutes: minutesUntil(vehicle.t, prediction.hr),
+        accessible: vehicle.a,
+        lat: vehicle.py,
+        lon: vehicle.px,
+      }))
       .sort((a, b) => a.minutes - b.minutes)
       .slice(0, MAX_VEHICLES),
   }));
@@ -88,4 +93,17 @@ export function sortByArrival<T extends { route_id: string; direction_id: number
     const [first, second] = [firstArrival(a), firstArrival(b)];
     return first === second ? 0 : first - second;
   });
+}
+
+export type NextBus = LiveVehicle & { routeId: string; directionId: number };
+
+export function nextBuses(arrivals: Arrivals | null, count: number): NextBus[] {
+  if (arrivals?.state !== "live") {
+    return [];
+  }
+  return arrivals.lines
+    .flatMap((line) => line.vehicles.map((vehicle) => ({ ...vehicle, routeId: line.routeId, directionId: line.directionId })))
+    .filter((bus) => Number.isFinite(bus.lat) && Number.isFinite(bus.lon))
+    .sort((a, b) => a.minutes - b.minutes)
+    .slice(0, count);
 }

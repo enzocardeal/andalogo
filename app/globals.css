@@ -10,8 +10,13 @@ body {
   overscroll-behavior: none;
 }
 
-.maplibregl-map .maplibregl-ctrl-top-right {
-  top: calc(env(safe-area-inset-top, 0px) + 3.75rem);
+.maplibregl-map .maplibregl-ctrl-bottom-right {
+  bottom: var(--sheet-height, 0px);
+  transition: bottom 150ms ease-out;
+}
+
+.maplibregl-map.map-north .maplibregl-ctrl-group:has(.maplibregl-ctrl-compass) {
+  display: none;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -56,5 +61,79 @@ body {
   select:disabled,
   label:has(input:is([type="radio"], [type="checkbox"]):disabled) {
     cursor: not-allowed;
+  }
+}
+
+.live-radar {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background: #16a34a;
+  box-shadow: 0 0 0 2px #ffffff;
+  pointer-events: none;
+}
+
+.live-radar span {
+  position: absolute;
+  inset: 0;
+  border: 2px solid #16a34a;
+  border-radius: 9999px;
+  animation: live-radar 2s ease-out infinite;
+}
+
+.live-radar span:last-child {
+  animation-delay: 1s;
+}
+
+@keyframes live-radar {
+  from {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  to {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+.live-bus {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px 3px 3px;
+  border-radius: 9999px;
+  background: #ffffff;
+  color: #0f172a;
+  font: 600 12px/1 system-ui, sans-serif;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+
+.live-bus-icon {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  color: #ffffff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-radar span {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .live-radar {
+    box-shadow: 0 0 0 2px #171717;
+  }
+
+  .live-bus {
+    background: #171717;
+    color: #f5f5f5;
   }
 }

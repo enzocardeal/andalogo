@@ -2,14 +2,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   CLICKABLE_LAYERS,
-  favoriteFilters,
   overlayLayers,
   ROUTE_SOURCE,
   SELECTED_LAYER,
   SELECTED_SIGN_LAYER,
-  selectedFilters,
   SIGN_IMAGES,
   signStyles,
+  stopFilters,
   STOPS_SOURCE,
 } from "./map-layers.ts";
 
@@ -48,16 +47,17 @@ test("every sign image has a style in both schemes, with a stronger outline when
   assert.notDeepEqual(signStyles("light")[SIGN_IMAGES.bus], signStyles("dark")[SIGN_IMAGES.bus]);
 });
 
-test("selectedFilters and favoriteFilters split stations from signs", () => {
+test("stopFilters hides the selected stop from the normal sign layers and splits stations from signs", () => {
   const isRail = ["in", ["get", "mode"], ["literal", ["metro", "cptm"]]];
-  assert.deepEqual(selectedFilters("sp:1"), {
-    [SELECTED_LAYER]: ["all", ["==", ["get", "id"], "sp:1"], isRail],
-    [SELECTED_SIGN_LAYER]: ["all", ["==", ["get", "id"], "sp:1"], ["!", isRail]],
-  });
+  const isSign = ["!", isRail];
   const ids = ["in", ["get", "id"], ["literal", ["sp:1", "sp:2"]]];
-  assert.deepEqual(favoriteFilters(new Set(["sp:1", "sp:2"])), {
+  const notSelected = ["!", ["==", ["get", "id"], "sp:1"]];
+  assert.deepEqual(stopFilters("sp:1", new Set(["sp:1", "sp:2"])), {
+    "bus-stops": ["all", isSign, notSelected],
     "favorite-stops": ["all", ids, isRail],
-    "favorite-signs": ["all", ids, ["!", isRail]],
+    "favorite-signs": ["all", ids, isSign, notSelected],
     "favorite-badges": ids,
+    [SELECTED_LAYER]: ["all", ["==", ["get", "id"], "sp:1"], isRail],
+    [SELECTED_SIGN_LAYER]: ["all", ["==", ["get", "id"], "sp:1"], isSign],
   });
 });

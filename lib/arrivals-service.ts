@@ -1,7 +1,7 @@
 import { toArrivals, type Arrivals } from "./arrivals.ts";
 import { createOlhoVivo, OLHO_VIVO_URL, OlhoVivoError, type StopPrediction } from "./olhovivo.ts";
 
-const TTL_MS = 20_000;
+const TTL_MS = 10_000;
 const FAILURE_TTL_MS = 15_000;
 const MAX_ENTRIES = 500;
 

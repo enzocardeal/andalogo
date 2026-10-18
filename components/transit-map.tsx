@@ -7,6 +7,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { MapSearch } from "@/components/map-search";
 import { RouteSheet } from "@/components/route-sheet";
 import { StopSheet } from "@/components/stop-sheet";
+import { nextBuses } from "@/lib/arrivals";
+import { showLiveMarkers } from "@/lib/live-markers";
 import { INITIAL_ZOOM, MAP_STYLE_URL, MAP_WORKER_PATH, SAO_PAULO_CENTER } from "@/lib/map";
 import { createMapController, type MapController } from "@/lib/map-controller";
 import { CLICKABLE_LAYERS, EMPTY_COLLECTION } from "@/lib/map-layers";
@@ -16,7 +18,8 @@ import { mapHref, parseMapView, routeGeoJSON, SHEET_SHARE, type MapView } from "
 import type { MapStop } from "@/lib/stops-file";
 import { strings } from "@/lib/strings";
 import { createClient } from "@/lib/supabase/client";
-import type { RouteDetails } from "@/lib/transit";
+import type { RouteDetails, StopDetails, StopLine } from "@/lib/transit";
+import { useArrivals } from "@/lib/use-arrivals";
 import { useColorScheme } from "@/lib/use-color-scheme";
 
 type MapError = "map" | "stops";
@@ -26,6 +29,7 @@ type LoadedRoute = { routeId: string; route: RouteDetails | null; failed: boolea
 const STOP_ZOOM = 16;
 const SHEET_ENTRY = "andalogoSheet";
 const SEARCH_HEIGHT = 72;
+const NEXT_BUSES = 2;
 
 async function loadBaseStyle(): Promise<StyleSpecification> {
   const response = await fetch(MAP_STYLE_URL);
@@ -69,12 +73,18 @@ export function TransitMap() {
 
   const container = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  const maplibreRef = useRef<typeof import("maplibre-gl") | null>(null);
+  const framedRef = useRef<string | null>(null);
   const controllerRef = useRef<MapController | null>(null);
   const stopsRef = useRef(new Map<string, MapStop>());
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<MapError | null>(null);
   const [loadedRoute, setLoadedRoute] = useState<LoadedRoute | null>(null);
   const [favorites, setFavorites] = useState<ReadonlySet<string>>(new Set());
+  const [stopLines, setStopLines] = useState<{ stopId: string; lines: StopLine[] } | null>(null);
+
+  const selectedStop = ready && view.stop ? stopsRef.current.get(view.stop) : undefined;
+  const arrivals = useArrivals(selectedStop?.mode === "bus" && selectedStop.id.startsWith("sp:") ? selectedStop.id : null);
 
   const navigate = useCallback((next: Partial<MapView>, mode: "push" | "replace" = "replace") => {
     const href = mapHref({ ...viewRef.current, ...next });
@@ -120,12 +130,10 @@ export function TransitMap() {
           center: SAO_PAULO_CENTER,
           zoom: INITIAL_ZOOM,
           maxPitch: 0,
-          dragRotate: false,
           pitchWithRotate: false,
           touchPitch: false,
           attributionControl: { compact: true },
         });
-        map.touchZoomRotate.disableRotation();
         const controller = createMapController(map, base, schemeRef.current, () => {
           if (!cancelled) {
             setReady(true);
@@ -135,7 +143,11 @@ export function TransitMap() {
           positionOptions: { enableHighAccuracy: true },
           trackUserLocation: true,
         });
-        map.addControl(geolocate, "top-right");
+        map.addControl(geolocate, "bottom-right");
+        map.addControl(new maplibregl.NavigationControl({ showZoom: false, visualizePitch: false }), "bottom-right");
+        const markNorth = () => map.getContainer().classList.toggle("map-north", Math.abs(map.getBearing()) < 0.5);
+        map.on("rotate", markNorth);
+        markNorth();
         map.once("load", () => {
           if (!startsAtPlace) {
             geolocate.trigger();
@@ -166,6 +178,7 @@ export function TransitMap() {
           }
         });
         mapRef.current = map;
+        maplibreRef.current = maplibregl;
         controllerRef.current = controller;
       })
       .catch((reason: unknown) => {
@@ -212,6 +225,39 @@ export function TransitMap() {
       });
     }
   }, [ready, view.stop]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const maplibregl = maplibreRef.current;
+    if (!view.stop) {
+      framedRef.current = null;
+    }
+    if (!map || !maplibregl || !selectedStop || arrivals?.state !== "live") {
+      return;
+    }
+    const buses = nextBuses(arrivals, NEXT_BUSES);
+    const lines = stopLines?.stopId === selectedStop.id ? stopLines.lines : [];
+    const removeMarkers = showLiveMarkers(maplibregl, map, selectedStop, buses, lines);
+    if (buses.length > 0 && framedRef.current !== selectedStop.id) {
+      framedRef.current = selectedStop.id;
+      const { clientWidth: width, clientHeight: height } = map.getContainer();
+      const visibleBottom = height * (1 - SHEET_SHARE);
+      const points = [selectedStop, ...buses].map(({ lon, lat }): [number, number] => [lon, lat]);
+      const outside = points.some((point) => {
+        const { x, y } = map.project(point);
+        return x < 0 || x > width || y < SEARCH_HEIGHT || y > visibleBottom;
+      });
+      if (outside) {
+        const lons = points.map(([lon]) => lon);
+        const lats = points.map(([, lat]) => lat);
+        map.fitBounds([Math.min(...lons), Math.min(...lats), Math.max(...lons), Math.max(...lats)], {
+          padding: { top: SEARCH_HEIGHT + 24, bottom: height - visibleBottom + 24, left: 96, right: 96 },
+          maxZoom: STOP_ZOOM,
+        });
+      }
+    }
+    return removeMarkers;
+  }, [arrivals, selectedStop, stopLines, view.stop]);
 
   useEffect(() => {
     if (!view.route) {
@@ -286,6 +332,8 @@ export function TransitMap() {
       {view.stop ? (
         <StopSheet
           stopId={view.stop}
+          arrivals={arrivals}
+          onLoaded={(stop: StopDetails | null) => setStopLines(stop ? { stopId: stop.id, lines: stop.lines } : null)}
           onClose={() => close({ stop: null })}
           onRoute={(routeId, dir) => navigate({ route: routeId, dir, stop: null }, "push")}
           onFavoriteChange={changeFavorite}
