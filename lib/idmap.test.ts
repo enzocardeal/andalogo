@@ -91,9 +91,12 @@ test("passes needs 95 % and at least one item", () => {
   assert.equal(passes({ name: "", passed: 0, total: 0, failures: [], gate: true }), false);
 });
 
-test("summarize makes every check a gate except the forecast coverage", () => {
+test("summarize makes every check a gate except the two coverage numbers", () => {
   const gates = summarize([], []).map((result) => [result.name, result.gate]);
-  assert.deepEqual(gates.filter(([, gate]) => !gate), [["Olho Vivo has a forecast for the stop now", false]]);
+  assert.deepEqual(gates.filter(([, gate]) => !gate), [
+    ["Olho Vivo has a forecast for the stop now", false],
+    ["Olho Vivo lines that GTFS also lists at the stop", false],
+  ]);
   assert.equal(gates.length, 7);
 });
 
@@ -104,4 +107,14 @@ test("sample is repeatable for one seed and picks distinct items", () => {
   assert.equal(new Set(first).size, 10);
   assert.notDeepEqual(sample(items, 10, 2), first);
   assert.equal(sample(items, 80, 1).length, 50);
+});
+
+test("H3 counts only lines that GTFS lists at the stop", () => {
+  const served = new Set(["8000-10|0"]);
+  const routes = new Set(["8000-10", "9999-10"]);
+  const check = checkStop(SE, served, routes, prediction([{ c: "8000-10", sl: 1 }, { c: "9999-10", sl: 2 }]));
+  const byName = new Map(summarize([check], []).map((result) => [result.name, result]));
+  assert.deepEqual([byName.get("H3 direction_id = sl - 1")?.passed, byName.get("H3 direction_id = sl - 1")?.total], [1, 1]);
+  assert.equal(byName.get("Olho Vivo lines that GTFS also lists at the stop")?.passed, 1);
+  assert.equal(byName.get("Olho Vivo lines that GTFS also lists at the stop")?.total, 2);
 });

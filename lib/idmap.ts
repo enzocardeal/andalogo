@@ -81,8 +81,8 @@ export function summarize(stops: StopCheck[], corridor: CorridorCheck[]): Rate[]
     rate("H1 corridor cp found in GTFS", corridor, (stop) => stop.inGtfs, (stop) => `${stop.cp} ${stop.name}`),
     rate("H1 corridor cp within 50 m", corridor.filter((stop) => stop.inGtfs), (stop) => near(stop.distanceM), (stop) => `${stop.cp} (${Math.round(stop.distanceM ?? 0)} m)`),
     rate("H2 sign c is a GTFS route_id", lines, (line) => line.routeKnown, lineLabel),
-    rate("H2 route serves the stop in GTFS", lines, (line) => line.servesStop, lineLabel),
-    rate("H3 direction_id = sl - 1", lines, (line) => line.directionMatches, lineLabel),
+    rate("Olho Vivo lines that GTFS also lists at the stop", lines, (line) => line.servesStop, lineLabel, false),
+    rate("H3 direction_id = sl - 1", lines.filter((line) => line.servesStop), (line) => line.directionMatches, lineLabel),
   ];
 }
 
