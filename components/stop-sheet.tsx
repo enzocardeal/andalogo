@@ -3,12 +3,12 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { StarIcon } from "@/components/bottom-nav";
 import { LineBadge } from "@/components/line-badge";
-import { headwayLabel } from "@/lib/headway";
+import { LineSummary } from "@/components/line-summary";
 import { strings } from "@/lib/strings";
 import { createClient } from "@/lib/supabase/client";
 import type { StopDetails } from "@/lib/transit";
 
-type Loaded = { stopId: string; stop: StopDetails | null; failed: boolean };
+type Loaded = { stopId: string; stop: StopDetails | null; failed: boolean; fetchedAt: Date };
 
 type StopSheetProps = {
   stopId: string;
@@ -30,7 +30,7 @@ export function StopSheet({ stopId, onClose, onRoute, onFavoriteChange }: StopSh
           console.error("get_stop failed:", error.message);
         }
         if (!cancelled) {
-          setLoaded({ stopId, stop: (data as StopDetails | null) ?? null, failed: error !== null });
+          setLoaded({ stopId, stop: (data as StopDetails | null) ?? null, failed: error !== null, fetchedAt: new Date() });
           setFavoriteFailed(false);
         }
       });
@@ -47,7 +47,7 @@ export function StopSheet({ stopId, onClose, onRoute, onFavoriteChange }: StopSh
       return;
     }
     const favorite = !stop.favorite;
-    setLoaded({ stopId, stop: { ...stop, favorite }, failed: false });
+    setLoaded({ stopId, stop: { ...stop, favorite }, failed: false, fetchedAt: current!.fetchedAt });
     setFavoriteFailed(false);
     onFavoriteChange(stop.id, favorite);
     const { error } = await createClient().rpc(favorite ? "add_favorite" : "remove_favorite", {
@@ -55,7 +55,7 @@ export function StopSheet({ stopId, onClose, onRoute, onFavoriteChange }: StopSh
     });
     if (error) {
       console.error("favorite failed:", error.message);
-      setLoaded({ stopId, stop, failed: false });
+      setLoaded({ stopId, stop, failed: false, fetchedAt: current!.fetchedAt });
       setFavoriteFailed(true);
       onFavoriteChange(stop.id, !favorite);
     }
@@ -68,7 +68,7 @@ export function StopSheet({ stopId, onClose, onRoute, onFavoriteChange }: StopSh
           <h2 className="text-lg font-semibold">{stop?.name ?? strings.loading}</h2>
           {stop && (
             <p className="text-sm text-neutral-500 dark:text-neutral-400">
-              {strings.modes[stop.mode]} · {strings.stop.scheduled}
+              {strings.modes[stop.mode]} · {stop.mode === "emtu" ? strings.stop.timetable : strings.stop.scheduled}
             </p>
           )}
         </div>
@@ -125,12 +125,7 @@ function StopBody({ loaded, onRoute }: { loaded: Loaded | null; onRoute: StopShe
             className="flex min-h-14 w-full items-center gap-3 py-2 text-left"
           >
             <LineBadge line={line} />
-            <span className="min-w-0 flex-1 truncate">{line.headsign || line.long_name}</span>
-            <span
-              className={`shrink-0 text-sm tabular-nums ${line.headway_s === null ? "text-neutral-400 dark:text-neutral-500" : "text-neutral-700 dark:text-neutral-300"}`}
-            >
-              {headwayLabel(line.headway_s)}
-            </span>
+            <LineSummary line={line} now={loaded.fetchedAt} />
           </button>
         </li>
       ))}

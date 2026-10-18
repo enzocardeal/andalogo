@@ -17,7 +17,12 @@ export type Line = {
   text_color: string | null;
 };
 
-export type StopLine = Line & { direction_id: number; headsign: string; headway_s: number | null };
+export type StopLine = Line & {
+  direction_id: number;
+  headsign: string;
+  headway_s: number | null;
+  departures: number[] | null;
+};
 
 export type StopDetails = {
   id: string;

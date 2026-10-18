@@ -34,7 +34,7 @@ const COLORS: Record<Scheme, Colors> = {
   light: {
     busFill: "#ffffff",
     busStroke: "#334155",
-    emtuStroke: "#c2410c",
+    emtuStroke: "#1d4ed8",
     railStroke: "#ffffff",
     label: "#0f172a",
     labelHalo: "#ffffff",
@@ -44,7 +44,7 @@ const COLORS: Record<Scheme, Colors> = {
   dark: {
     busFill: "#1e293b",
     busStroke: "#cbd5e1",
-    emtuStroke: "#fb923c",
+    emtuStroke: "#60a5fa",
     railStroke: "#0f172a",
     label: "#e2e8f0",
     labelHalo: "#0f172a",

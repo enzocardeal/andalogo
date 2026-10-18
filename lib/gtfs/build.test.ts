@@ -2,6 +2,11 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { decodePolyline } from "../polyline.ts";
 import { buildFeed, dayTypesOf, minutesOf, modeOf, type FeedInput } from "./build.ts";
+import type { TripStops } from "./trips.ts";
+
+function trip(stopIds: string[], departures: number[] = stopIds.map(() => 0)): TripStops {
+  return { stopIds, departures };
+}
 
 function service(id: string, days: string): Record<string, string> {
   const names = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
@@ -21,6 +26,7 @@ const INPUT: FeedInput = {
     { route_id: "FUN", service_id: "USD", trip_id: "fun-0", trip_headsign: "Topo", direction_id: "0", shape_id: "" },
     { route_id: "1012-10", service_id: "USD", trip_id: "bus-0-short", trip_headsign: "Sé", direction_id: "0", shape_id: "" },
     { route_id: "1012-10", service_id: "USD", trip_id: "bus-0-late", trip_headsign: "Jd. B", direction_id: "0", shape_id: "" },
+    { route_id: "1012-10", service_id: "USD", trip_id: "bus-0-later", trip_headsign: "Jd. B", direction_id: "0", shape_id: "" },
   ],
   stops: [
     { stop_id: "1", stop_name: "Rua A, 10", stop_lat: "-23.5", stop_lon: "-46.6" },
@@ -28,16 +34,15 @@ const INPUT: FeedInput = {
     { stop_id: "3", stop_name: "Sem linha", stop_lat: "-23.6", stop_lon: "-46.7" },
     { stop_id: "4", stop_name: "Funicular", stop_lat: "-23.7", stop_lon: "-46.8" },
   ],
-  stopTimes: [
-    { trip_id: "bus-0", stop_id: "1", stop_sequence: "1" },
-    { trip_id: "bus-0", stop_id: "2", stop_sequence: "2" },
-    { trip_id: "bus-1", stop_id: "1", stop_sequence: "1" },
-    { trip_id: "l1-0", stop_id: "2", stop_sequence: "1" },
-    { trip_id: "fun-0", stop_id: "4", stop_sequence: "1" },
-    { trip_id: "bus-0-short", stop_id: "2", stop_sequence: "1" },
-    { trip_id: "bus-0-late", stop_id: "2", stop_sequence: "20" },
-    { trip_id: "bus-0-late", stop_id: "1", stop_sequence: "10" },
-  ],
+  tripStops: new Map([
+    ["bus-0", trip(["1", "2"])],
+    ["bus-1", trip(["1"], [3600])],
+    ["l1-0", trip(["2"])],
+    ["fun-0", trip(["4"])],
+    ["bus-0-short", trip(["2"], [7200])],
+    ["bus-0-late", trip(["1", "2"], [36000, 36300])],
+    ["bus-0-later", trip(["1", "2"], [39600, 39900])],
+  ]),
   frequencies: [
     { trip_id: "bus-0", start_time: "01:00:00", end_time: "01:59:00", headway_secs: "3600" },
     { trip_id: "bus-0", start_time: "00:00:00", end_time: "00:59:00", headway_secs: "1200" },
@@ -141,4 +146,24 @@ test("buildFeed keeps the most common stop sequence per route and direction, wit
     { route_id: "sp:1012-10", direction_id: 1, headsign: "Term. A", polyline: [[-23.5, -46.6]], stop_ids: ["sp:1"] },
     { route_id: "sp:METRÔ L1", direction_id: 0, headsign: "Jabaquara", polyline: [[-23.55, -46.63]], stop_ids: ["sp:2"] },
   ]);
+});
+
+test("buildFeed stores timetable trips as shared patterns with start times", () => {
+  const { timetablePatterns, timetableStops, timetableTrips } = buildFeed("sptrans", INPUT);
+  assert.deepEqual(timetablePatterns, [
+    { id: "sp:t1", route_id: "sp:1012-10", direction_id: 1, headsign: "Term. A" },
+    { id: "sp:t2", route_id: "sp:1012-10", direction_id: 0, headsign: "Sé" },
+    { id: "sp:t3", route_id: "sp:1012-10", direction_id: 0, headsign: "Jd. B" },
+  ]);
+  assert.deepEqual(timetableStops, [
+    { pattern_id: "sp:t1", stop_index: 0, stop_id: "sp:1", offset_s: 0 },
+    { pattern_id: "sp:t2", stop_index: 0, stop_id: "sp:2", offset_s: 0 },
+    { pattern_id: "sp:t3", stop_index: 0, stop_id: "sp:1", offset_s: 0 },
+    { pattern_id: "sp:t3", stop_index: 1, stop_id: "sp:2", offset_s: 300 },
+  ]);
+  assert.deepEqual(
+    timetableTrips.filter((row) => row.day_type === "weekday").map((row) => `${row.pattern_id} ${row.start_s}`),
+    ["sp:t1 3600", "sp:t2 7200", "sp:t3 36000", "sp:t3 39600"],
+  );
+  assert.equal(timetableTrips.length, 12);
 });

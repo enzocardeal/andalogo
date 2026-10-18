@@ -27,6 +27,9 @@ export async function replaceFeed(sql: Sql, feed: Feed, tables: FeedTables, vers
     await insertAll(tx, "stop_routes", tables.stopRoutes);
     await insertAll(tx, "headways", tables.headways);
     await insertAll(tx, "route_patterns", tables.patterns);
+    await insertAll(tx, "timetable_patterns", tables.timetablePatterns);
+    await insertAll(tx, "timetable_stops", tables.timetableStops);
+    await insertAll(tx, "timetable_trips", tables.timetableTrips);
     await tx`
       insert into public.feed_versions (feed, sha256, stops_file)
       values (${feed}, ${version.sha256}, ${version.stopsFile})

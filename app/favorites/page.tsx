@@ -5,7 +5,7 @@ import { signOut } from "@/app/auth/actions";
 import { EmptyState } from "@/components/empty-state";
 import { LineBadge } from "@/components/line-badge";
 import { ListSkeleton } from "@/components/skeleton";
-import { headwayLabel } from "@/lib/headway";
+import { LineSummary } from "@/components/line-summary";
 import { mapHref } from "@/lib/map-view";
 import { strings } from "@/lib/strings";
 import { createClient } from "@/lib/supabase/server";
@@ -77,6 +77,7 @@ function FavoriteCard({ favorite }: { favorite: Favorite }) {
     return <p className="p-3 text-neutral-500 dark:text-neutral-400">{strings.favorites.removedStop}</p>;
   }
   const hidden = stop.lines.length - LINES_PER_FAVORITE;
+  const now = new Date();
   return (
     <Link href={mapHref({ stop: stop.id, route: null, dir: 0 })} className="flex flex-col gap-2 p-3">
       <span className="flex items-baseline justify-between gap-3">
@@ -87,10 +88,7 @@ function FavoriteCard({ favorite }: { favorite: Favorite }) {
         {stop.lines.slice(0, LINES_PER_FAVORITE).map((line) => (
           <li key={`${line.route_id}:${line.direction_id}`} className="flex items-center gap-2 text-sm">
             <LineBadge line={line} />
-            <span className="min-w-0 flex-1 truncate">{line.headsign || line.long_name}</span>
-            <span className={`shrink-0 tabular-nums ${line.headway_s === null ? "text-neutral-400 dark:text-neutral-500" : "text-neutral-700 dark:text-neutral-300"}`}>
-              {headwayLabel(line.headway_s)}
-            </span>
+            <LineSummary line={line} now={now} />
           </li>
         ))}
       </ul>

@@ -6,7 +6,7 @@ Stack: Next.js on Vercel (`gru1`), Supabase (`sa-east-1`), MapLibre GL JS with O
 
 ## Status
 
-Milestones M0, M1, M3 and M4: Google login with invite, all SPTrans stops and stations on the map with the scheduled frequency per line, the map as the start screen, favorite stops, line routes, and search. M2 (live arrivals) waits for the Olho Vivo token.
+Milestones M0, M1, M3, M4 and M5: Google login with invite, all SPTrans and EMTU stops and the Metrô and CPTM stations on the map, with the scheduled frequency (SPTrans) or the next timetable departures (EMTU) per line, the map as the start screen, favorite stops, line routes, and search. M2 (live arrivals) waits for the Olho Vivo token.
 
 | Milestone | Content |
 |---|---|
@@ -112,14 +112,14 @@ curl -L -o data/artesp/gtfs.zip "https://dadosabertos.artesp.sp.gov.br/dataset/9
 
 `npm run gtfs:inspect -- <feed.zip> …` prints the files, routes by type, rail lines, stops, trips, frequencies and shapes of each feed.
 
-`npm run gtfs:load -- --feed sptrans --zip data/sptrans/gtfs.zip` loads the feed. It needs `SUPABASE_DB_URL`, `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in `.env.local`. It does these steps:
+`npm run gtfs:load -- --feed sptrans --zip data/sptrans/gtfs.zip` loads a feed. Use `--feed artesp --zip data/artesp/gtfs.zip` for EMTU: the script keeps only the routes whose two end cities are in Grande São Paulo, and it stores the timetable as shared stop patterns plus one start time per trip. It needs `SUPABASE_DB_URL`, `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in `.env.local`. It does these steps:
 
 1. It skips the load when the active version has the same sha256. `--force` loads it again.
 2. It builds the stops, routes, lines per stop and frequency windows from the feed.
 3. It uploads the stops file for the map to the public Storage bucket `gtfs`, and creates the bucket when it is missing.
 4. In one transaction, it replaces the rows of the feed and records the version in `feed_versions`. The app reads the old rows until the commit.
 
-Run it again when SPTrans publishes a new feed, about once a week.
+Run it again when SPTrans or ARTESP publishes a new feed. SPTrans changes about once a week, ARTESP about once a month.
 
 `npm run idmap:check -- --gtfs data/sptrans/gtfs.zip` checks that GTFS IDs match Olho Vivo IDs. It needs `OLHOVIVO_TOKEN` in `.env.local`. Run it on a weekday between 08:00 and 19:00. It checks three hypotheses on 100 random bus stops and 20 corridor stops:
 
