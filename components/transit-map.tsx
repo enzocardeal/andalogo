@@ -8,18 +8,20 @@ import { MapSearch } from "@/components/map-search";
 import { RouteSheet } from "@/components/route-sheet";
 import { StopSheet } from "@/components/stop-sheet";
 import { nextBuses } from "@/lib/arrivals";
-import { showLiveMarkers } from "@/lib/live-markers";
+import { lineMotion, type MovingBus } from "@/lib/bus-motion";
+import { busLabel, createBusLayer, type BusLayer, type ShownBus } from "@/lib/live-markers";
 import { INITIAL_ZOOM, MAP_STYLE_URL, MAP_WORKER_PATH, SAO_PAULO_CENTER } from "@/lib/map";
 import { createMapController, type MapController } from "@/lib/map-controller";
 import { CLICKABLE_LAYERS, EMPTY_COLLECTION } from "@/lib/map-layers";
 import { loadFavoriteIds, loadMapStops } from "@/lib/map-stops";
 import { transitStyle } from "@/lib/map-style";
-import { mapHref, parseMapView, routeGeoJSON, SHEET_SHARE, type MapView } from "@/lib/map-view";
+import { DEFAULT_ROUTE_COLOR, mapHref, parseMapView, routeGeoJSON, SHEET_SHARE, type MapView } from "@/lib/map-view";
 import type { MapStop } from "@/lib/stops-file";
 import { strings } from "@/lib/strings";
 import { createClient } from "@/lib/supabase/client";
 import type { RouteDetails, StopDetails, StopLine } from "@/lib/transit";
 import { useArrivals } from "@/lib/use-arrivals";
+import { linesKey, useBusTracks } from "@/lib/use-bus-tracks";
 import { useColorScheme } from "@/lib/use-color-scheme";
 
 type MapError = "map" | "stops";
@@ -75,6 +77,7 @@ export function TransitMap() {
   const mapRef = useRef<MapLibreMap | null>(null);
   const maplibreRef = useRef<typeof import("maplibre-gl") | null>(null);
   const framedRef = useRef<string | null>(null);
+  const busLayerRef = useRef<BusLayer | null>(null);
   const controllerRef = useRef<MapController | null>(null);
   const stopsRef = useRef(new Map<string, MapStop>());
   const [ready, setReady] = useState(false);
@@ -85,6 +88,13 @@ export function TransitMap() {
 
   const selectedStop = ready && view.stop ? stopsRef.current.get(view.stop) : undefined;
   const arrivals = useArrivals(selectedStop?.mode === "bus" && selectedStop.id.startsWith("sp:") ? selectedStop.id : null);
+  const route = view.route && loadedRoute?.routeId === view.route ? loadedRoute : null;
+  const trackedLines = view.route
+    ? route?.route?.mode === "bus" && view.route.startsWith("sp:")
+      ? [{ routeId: view.route, directionId: view.dir }]
+      : []
+    : nextBuses(arrivals, NEXT_BUSES);
+  const tracks = useBusTracks(linesKey(trackedLines));
 
   const navigate = useCallback((next: Partial<MapView>, mode: "push" | "replace" = "replace") => {
     const href = mapHref({ ...viewRef.current, ...next });
@@ -190,6 +200,8 @@ export function TransitMap() {
     return () => {
       cancelled = true;
       stopLocationDot();
+      busLayerRef.current?.remove();
+      busLayerRef.current = null;
       mapRef.current?.remove();
       mapRef.current = null;
       controllerRef.current = null;
@@ -233,15 +245,51 @@ export function TransitMap() {
     if (!view.stop) {
       framedRef.current = null;
     }
-    if (!map || !maplibregl || !selectedStop || arrivals?.state !== "live") {
+    if (!ready || !map || !maplibregl) {
       return;
     }
-    const buses = view.route
-      ? nextBuses(arrivals, 1, { routeId: view.route, directionId: view.dir })
-      : nextBuses(arrivals, NEXT_BUSES);
-    const lines = stopLines?.stopId === selectedStop.id ? stopLines.lines : [];
-    const removeMarkers = showLiveMarkers(maplibregl, map, buses, lines);
-    const frameKey = view.route ? `${selectedStop.id}|${view.route}|${view.dir}` : selectedStop.id;
+    const layer = (busLayerRef.current ??= createBusLayer(maplibregl, map));
+    const motions = new Map(tracks.map((line) => [`${line.routeId}|${line.directionId}`, { line, motion: lineMotion(line) }]));
+    const moving = (routeId: string, directionId: number, p: string): MovingBus | null => {
+      const entry = motions.get(`${routeId}|${directionId}`);
+      const track = entry?.line.buses.find((bus) => bus.p === p);
+      if (!entry || !track || track.alongM === null) {
+        return null;
+      }
+      return { key: `${routeId}|${directionId}|${p}`, line: entry.motion, track: { ...track, alongM: track.alongM } };
+    };
+    const routeId = view.route;
+    const buses = !selectedStop
+      ? []
+      : routeId
+        ? nextBuses(arrivals, 1, { routeId, directionId: view.dir })
+        : nextBuses(arrivals, NEXT_BUSES);
+    const lines = selectedStop && stopLines?.stopId === selectedStop.id ? stopLines.lines : [];
+    const shown: ShownBus[] = routeId
+      ? (motions.get(`${routeId}|${view.dir}`)?.line.buses ?? []).map((bus) => ({
+          key: `${routeId}|${view.dir}|${bus.p}`,
+          label: route?.route?.short_name ?? routeId.replace(/^sp:/, ""),
+          color: route?.route?.color ?? DEFAULT_ROUTE_COLOR,
+          lat: bus.lat,
+          lon: bus.lon,
+          moving: moving(routeId, view.dir, bus.p),
+        }))
+      : buses.map((bus) => {
+          const line = lines.find((candidate) => candidate.route_id === bus.routeId && candidate.direction_id === bus.directionId);
+          return {
+            key: `${bus.routeId}|${bus.directionId}|${bus.p}`,
+            label: busLabel(bus, line),
+            color: line?.color ?? DEFAULT_ROUTE_COLOR,
+            lat: bus.lat,
+            lon: bus.lon,
+            moving: moving(bus.routeId, bus.directionId, bus.p),
+          };
+        });
+    layer.update(shown);
+    if (!selectedStop) {
+      return;
+    }
+    const frameKey = routeId ? `${selectedStop.id}|${routeId}|${view.dir}` : selectedStop.id;
     if (buses.length > 0 && framedRef.current !== frameKey) {
       framedRef.current = frameKey;
       const { clientWidth: width, clientHeight: height } = map.getContainer();
@@ -260,8 +308,7 @@ export function TransitMap() {
         });
       }
     }
-    return removeMarkers;
-  }, [arrivals, selectedStop, stopLines, view.stop, view.route, view.dir]);
+  }, [ready, arrivals, selectedStop, stopLines, tracks, route, view.stop, view.route, view.dir]);
 
   useEffect(() => {
     if (!view.route) {
@@ -283,8 +330,6 @@ export function TransitMap() {
       cancelled = true;
     };
   }, [view.route]);
-
-  const route = view.route && loadedRoute?.routeId === view.route ? loadedRoute : null;
 
   useEffect(() => {
     const controller = controllerRef.current;

@@ -1,12 +1,7 @@
 import { stopCode } from "@/lib/arrivals";
-import { createArrivalsService } from "@/lib/arrivals-service";
 import type { StopPattern } from "@/lib/eta";
+import { liveService } from "@/lib/live-service";
 import { createClient } from "@/lib/supabase/server";
-
-const arrivalsFor = createArrivalsService({
-  token: process.env.OLHOVIVO_TOKEN,
-  baseUrl: process.env.OLHOVIVO_URL || undefined,
-});
 
 export async function GET(request: Request) {
   const supabase = await createClient();
@@ -25,5 +20,5 @@ export async function GET(request: Request) {
     }
     return patterns as StopPattern[];
   };
-  return Response.json(await arrivalsFor(code, loadPatterns), { headers: { "Cache-Control": "private, no-store" } });
+  return Response.json(await liveService.arrivalsFor(code, loadPatterns), { headers: { "Cache-Control": "private, no-store" } });
 }

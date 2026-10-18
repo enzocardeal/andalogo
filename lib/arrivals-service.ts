@@ -1,4 +1,5 @@
 import { combineArrivals, type Arrivals, type EstimatedLine } from "./arrivals.ts";
+import { lineTracks, type LinePattern, type LineRef, type LineTracks } from "./bus-tracks.ts";
 import { circularDirections, estimateStop, indexPositions, type PositionIndex, type StopPattern } from "./eta.ts";
 import { createOlhoVivo, OLHO_VIVO_URL, OlhoVivoError, type Positions, type StopPrediction } from "./olhovivo.ts";
 
@@ -52,16 +53,20 @@ export function createArrivalsService({ token, baseUrl = OLHO_VIVO_URL, fetchImp
   const arrivals = createCache<Arrivals>(now);
   const patterns = createCache<StopPattern[]>(now);
   const positions = createCache<PositionIndex>(now);
+  const linePatterns = createCache<LinePattern | null>(now);
+
+  function positionIndex(): Promise<PositionIndex> {
+    return positions("all", async () => ({
+      value: indexPositions(await client!.get<Positions>("/Posicao")),
+      ttl: POSITIONS_TTL_MS,
+    }));
+  }
 
   async function estimatesFor(stopPatterns: StopPattern[]): Promise<EstimatedLine[]> {
     if (stopPatterns.length === 0) {
       return [];
     }
-    const index = await positions("all", async () => ({
-      value: indexPositions(await client!.get<Positions>("/Posicao")),
-      ttl: POSITIONS_TTL_MS,
-    }));
-    return estimateStop(stopPatterns, index, now());
+    return estimateStop(stopPatterns, await positionIndex(), now());
   }
 
   async function load(code: string, loadPatterns: () => Promise<StopPattern[]>): Promise<{ value: Arrivals; ttl: number }> {
@@ -92,7 +97,26 @@ export function createArrivalsService({ token, baseUrl = OLHO_VIVO_URL, fetchImp
     }
   }
 
-  return function arrivalsFor(code: string, loadPatterns: () => Promise<StopPattern[]>): Promise<Arrivals> {
+  function arrivalsFor(code: string, loadPatterns: () => Promise<StopPattern[]>): Promise<Arrivals> {
     return arrivals(code, () => load(code, loadPatterns));
-  };
+  }
+
+  async function tracksFor(lines: LineRef[], loadLine: (line: LineRef) => Promise<LinePattern | null>): Promise<LineTracks[]> {
+    if (!client) {
+      return [];
+    }
+    const loaded = await Promise.all(
+      lines.map((line) =>
+        linePatterns(`${line.routeId}|${line.directionId}`, async () => ({ value: await loadLine(line), ttl: PATTERNS_TTL_MS })),
+      ),
+    );
+    const found = loaded.filter((pattern) => pattern !== null);
+    if (found.length === 0) {
+      return [];
+    }
+    const index = await positionIndex();
+    return found.map((pattern) => lineTracks(pattern, index, now()));
+  }
+
+  return { arrivalsFor, tracksFor };
 }

@@ -78,6 +78,15 @@ body {
   pointer-events: none;
 }
 
+.live-bus-arrow {
+  display: grid;
+  place-items: center;
+  width: 12px;
+  height: 12px;
+  margin-left: 2px;
+  color: inherit;
+}
+
 .live-bus-signal {
   width: 12px;
   height: 12px;

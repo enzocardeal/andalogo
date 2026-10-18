@@ -8,7 +8,7 @@ const STOP_MAX_OFF_ROUTE_M = 200;
 const STOP_NEAR_M = 40;
 export const TERMINAL_M = 300;
 const PRIOR_SAMPLES = 3;
-const MAX_POSITION_AGE_S = 300;
+export const MAX_POSITION_AGE_S = 300;
 const PASSED_S = 60;
 const MAX_ESTIMATE_S = 5400;
 const DEFAULT_PACE_S_PER_M = 0.24;
@@ -128,6 +128,61 @@ export function travelSeconds(offsets: number[], paces: number[], fallback: numb
     seconds += Math.max(0, Math.min(toM, offsets[k + 1]) - Math.max(fromM, offsets[k])) * paces[k];
   }
   return seconds;
+}
+
+export function advanceMeters(offsets: number[], paces: number[], fallback: number, fromM: number, seconds: number): number {
+  const segments: [number, number, number][] = [
+    [-Infinity, offsets[0], fallback],
+    ...offsets.slice(1).map((offset, k): [number, number, number] => [offsets[k], offset, paces[k]]),
+  ];
+  let atM = fromM;
+  let left = seconds;
+  for (const [start, end, pace] of segments) {
+    if (atM >= end) {
+      continue;
+    }
+    atM = Math.max(atM, start);
+    const needed = (end - atM) * pace;
+    if (needed >= left) {
+      return atM + left / pace;
+    }
+    left -= needed;
+    atM = end;
+  }
+  return atM;
+}
+
+export type RoutePoint = { lat: number; lon: number; bearing: number };
+
+export function pointAt(route: Route, alongM: number): RoutePoint {
+  const { xy, cumulative, scale } = route;
+  if (xy.length < 2) {
+    const [x, y] = xy[0] ?? [0, 0];
+    return { lat: y / METERS_PER_DEGREE, lon: x / scale, bearing: 0 };
+  }
+  const target = Math.max(0, Math.min(cumulative.at(-1)!, alongM));
+  let low = 0;
+  let high = xy.length - 2;
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2);
+    if (cumulative[middle] <= target) {
+      low = middle;
+    } else {
+      high = middle - 1;
+    }
+  }
+  let i = low;
+  while (i < xy.length - 2 && cumulative[i + 1] === cumulative[i]) {
+    i++;
+  }
+  const length = cumulative[i + 1] - cumulative[i];
+  const t = length > 0 ? (target - cumulative[i]) / length : 0;
+  const [ax, ay] = xy[i];
+  const [bx, by] = xy[i + 1];
+  const x = ax + t * (bx - ax);
+  const y = ay + t * (by - ay);
+  const bearing = ((Math.atan2(bx - ax, by - ay) * 180) / Math.PI + 360) % 360;
+  return { lat: y / METERS_PER_DEGREE, lon: x / scale, bearing };
 }
 
 export function indexPositions(positions: Positions): PositionIndex {

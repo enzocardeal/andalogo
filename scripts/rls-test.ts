@@ -407,6 +407,13 @@ test("savePaces merges calibration rows and get_stop_eta returns the paces of th
   assert.deepEqual(await pacesAt("2026-10-19T12:30:00-03:00"), [null, null]);
 });
 
+test("get_line_eta returns the pattern of one SPTrans bus line direction", async () => {
+  const line = ok(await member.client.rpc("get_line_eta", { p_route_id: busId, p_direction_id: 0 }), "get_line_eta") as Record<string, unknown>;
+  assert.deepEqual([line.route_id, line.direction_id, line.stop_offsets_m, line.run_time_s, line.circular], [busId, 0, [0, 500], 120, true]);
+  assert.equal(ok(await member.client.rpc("get_line_eta", { p_route_id: busId, p_direction_id: 1 }), "other direction"), null);
+  assert.equal(ok(await member.client.rpc("get_line_eta", { p_route_id: nightId, p_direction_id: 0 }), "line without pattern"), null);
+});
+
 test("anon cannot execute the favorite, route or search RPCs", async () => {
   const calls: [string, Record<string, unknown>][] = [
     ["add_favorite", { p_stop_id: stopId }],
@@ -416,6 +423,7 @@ test("anon cannot execute the favorite, route or search RPCs", async () => {
     ["get_route", { p_route_id: busId }],
     ["search", { p_query: "se" }],
     ["get_stop_eta", { p_stop_id: stopId }],
+    ["get_line_eta", { p_route_id: busId, p_direction_id: 0 }],
   ];
   for (const [fn, args] of calls) {
     refused(await anon.rpc(fn, args), "42501", DENIED, `anon ${fn}`);

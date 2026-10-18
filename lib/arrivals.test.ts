@@ -56,9 +56,9 @@ test("combineArrivals keeps up to three fresh vehicles per line, soonest first",
         routeId: "sp:8000-10",
         directionId: 1,
         vehicles: [
-          { minutes: 3, accessible: false, ...AT },
-          { minutes: 9, accessible: true, ...AT },
-          { minutes: 12, accessible: true, ...AT },
+          { p: "11111", minutes: 3, accessible: false, ...AT },
+          { p: "11111", minutes: 9, accessible: true, ...AT },
+          { p: "11111", minutes: 12, accessible: true, ...AT },
         ],
       },
       { routeId: "sp:1012-10", directionId: 0, vehicles: [] },
@@ -95,13 +95,13 @@ test("combineArrivals adds GPS estimates for buses that SPTrans does not list", 
   assert.deepEqual(combineArrivals(prediction("10:00", [{ c: "8000-10", sl: 2, vs: [vehicle("10:09")] }]), estimated, NOW), {
     state: "live",
     lines: [
-      { routeId: "sp:8000-10", directionId: 1, vehicles: [{ minutes: 4, accessible: true, ...AT }, { minutes: 9, accessible: true, ...AT }] },
-      { routeId: "sp:917H-10", directionId: 0, vehicles: [{ minutes: 10, accessible: true, ...AT }] },
+      { routeId: "sp:8000-10", directionId: 1, vehicles: [{ p: "22222", minutes: 4, accessible: true, ...AT }, { p: "11111", minutes: 9, accessible: true, ...AT }] },
+      { routeId: "sp:917H-10", directionId: 0, vehicles: [{ p: "33333", minutes: 10, accessible: true, ...AT }] },
     ],
   });
   assert.deepEqual(combineArrivals(prediction("10:00", null), estimated.slice(1), NOW), {
     state: "live",
-    lines: [{ routeId: "sp:917H-10", directionId: 0, vehicles: [{ minutes: 10, accessible: true, ...AT }] }],
+    lines: [{ routeId: "sp:917H-10", directionId: 0, vehicles: [{ p: "33333", minutes: 10, accessible: true, ...AT }] }],
   });
   assert.deepEqual(combineArrivals(null, estimated.slice(2), NOW), { state: "not_covered", lines: [] });
 });
@@ -116,8 +116,8 @@ test("liveLineFor and sortByArrival put lines with the soonest live vehicle firs
   const arrivals = {
     state: "live" as const,
     lines: [
-      { routeId: "sp:B", directionId: 0, vehicles: [{ minutes: 9, accessible: true, ...AT }] },
-      { routeId: "sp:C", directionId: 1, vehicles: [{ minutes: 2, accessible: true, ...AT }] },
+      { routeId: "sp:B", directionId: 0, vehicles: [{ p: "1", minutes: 9, accessible: true, ...AT }] },
+      { routeId: "sp:C", directionId: 1, vehicles: [{ p: "1", minutes: 2, accessible: true, ...AT }] },
     ],
   };
   const lines = [
@@ -136,8 +136,8 @@ test("nextBuses picks the soonest located buses across lines", () => {
   const arrivals = {
     state: "live" as const,
     lines: [
-      { routeId: "sp:A", directionId: 0, vehicles: [{ minutes: 9, accessible: true, ...AT }, { minutes: 20, accessible: true, ...AT }] },
-      { routeId: "sp:B", directionId: 1, vehicles: [{ minutes: 2, accessible: false, ...AT }] },
+      { routeId: "sp:A", directionId: 0, vehicles: [{ p: "1", minutes: 9, accessible: true, ...AT }, { p: "2", minutes: 20, accessible: true, ...AT }] },
+      { routeId: "sp:B", directionId: 1, vehicles: [{ p: "3", minutes: 2, accessible: false, ...AT }] },
     ],
   };
   assert.deepEqual(nextBuses(arrivals, 2).map((bus) => [bus.routeId, bus.minutes]), [["sp:B", 2], ["sp:A", 9]]);

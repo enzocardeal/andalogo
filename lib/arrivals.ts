@@ -2,7 +2,7 @@ import type { StopPrediction } from "./olhovivo.ts";
 
 export type ArrivalState = "live" | "not_covered" | "stale" | "upstream_down" | "auth_failed" | "unavailable";
 
-export type LiveVehicle = { minutes: number; accessible: boolean; lat: number; lon: number };
+export type LiveVehicle = { p: string; minutes: number; accessible: boolean; lat: number; lon: number };
 
 export type LiveLine = { routeId: string; directionId: number; vehicles: LiveVehicle[] };
 
@@ -47,7 +47,7 @@ function isFresh(capturedAt: string | undefined, now: Date): boolean {
   return Number.isNaN(time) || now.getTime() - time <= STALE_MINUTES * 60_000;
 }
 
-export type EstimatedLine = { routeId: string; directionId: number; vehicles: (LiveVehicle & { p: string })[] };
+export type EstimatedLine = LiveLine;
 
 function predictedLines(
   prediction: StopPrediction,
@@ -108,8 +108,7 @@ export function combineArrivals(
       directionId: line.directionId,
       vehicles: line.vehicles
         .toSorted((a, b) => a.minutes - b.minutes)
-        .slice(0, MAX_VEHICLES)
-        .map(({ minutes, accessible, lat, lon }) => ({ minutes, accessible, lat, lon })),
+        .slice(0, MAX_VEHICLES),
     })),
   };
 }

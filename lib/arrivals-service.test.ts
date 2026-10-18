@@ -37,7 +37,7 @@ const POSITIONS = {
   l: [{ c: "917H-10", cl: 3, sl: 1, lt0: "", lt1: "", qv: 1, vs: [{ p: 9, a: false, ta: "2026-10-19T12:59:40Z", py: -23.55, px: -46.6341 }] }],
 };
 
-const GPS_ONLY = { state: "live", lines: [{ routeId: "sp:917H-10", directionId: 0, vehicles: [{ minutes: 3, accessible: false, lat: -23.55, lon: -46.6341 }] }] };
+const GPS_ONLY = { state: "live", lines: [{ routeId: "sp:917H-10", directionId: 0, vehicles: [{ p: "9", minutes: 3, accessible: false, lat: -23.55, lon: -46.6341 }] }] };
 
 const PREDICTION = {
   hr: "10:00",
@@ -47,10 +47,10 @@ const PREDICTION = {
 test("the service caches a stop for 10 seconds and shares parallel requests", async () => {
   const time = clock("2026-10-19T10:00:10-03:00");
   const fake = fakeOlhoVivo(() => Response.json(PREDICTION));
-  const arrivalsFor = createArrivalsService({ token: "t", baseUrl: BASE, fetchImpl: fake.fetchImpl, now: time.now });
+  const { arrivalsFor } = createArrivalsService({ token: "t", baseUrl: BASE, fetchImpl: fake.fetchImpl, now: time.now });
 
   const [first, second] = await Promise.all([arrivalsFor("1", NO_PATTERNS), arrivalsFor("1", NO_PATTERNS)]);
-  assert.deepEqual(first, { state: "live", lines: [{ routeId: "sp:8000-10", directionId: 0, vehicles: [{ minutes: 4, accessible: true, lat: 0, lon: 0 }] }] });
+  assert.deepEqual(first, { state: "live", lines: [{ routeId: "sp:8000-10", directionId: 0, vehicles: [{ p: "1", minutes: 4, accessible: true, lat: 0, lon: 0 }] }] });
   assert.equal(second, first);
   time.advance(9_000);
   await arrivalsFor("1", NO_PATTERNS);
@@ -62,7 +62,7 @@ test("the service caches a stop for 10 seconds and shares parallel requests", as
 
 test("the service reports a missing token without a network call", async () => {
   const fake = fakeOlhoVivo(() => Response.json(PREDICTION));
-  const arrivalsFor = createArrivalsService({ token: undefined, baseUrl: BASE, fetchImpl: fake.fetchImpl });
+  const { arrivalsFor } = createArrivalsService({ token: undefined, baseUrl: BASE, fetchImpl: fake.fetchImpl });
   assert.deepEqual(await arrivalsFor("1", NO_PATTERNS), { state: "unavailable", lines: [] });
   assert.deepEqual(fake.calls, []);
 });
@@ -70,7 +70,7 @@ test("the service reports a missing token without a network call", async () => {
 test("the service maps failures and caches them for 15 seconds", async () => {
   const time = clock("2026-10-19T10:00:10-03:00");
   const fake = fakeOlhoVivo(() => new Response("", { status: 503 }));
-  const arrivalsFor = createArrivalsService({ token: "t", baseUrl: BASE, fetchImpl: fake.fetchImpl, now: time.now });
+  const { arrivalsFor } = createArrivalsService({ token: "t", baseUrl: BASE, fetchImpl: fake.fetchImpl, now: time.now });
   assert.deepEqual(await arrivalsFor("1", NO_PATTERNS), { state: "upstream_down", lines: [] });
   time.advance(14_000);
   await arrivalsFor("1", NO_PATTERNS);
@@ -80,17 +80,17 @@ test("the service maps failures and caches them for 15 seconds", async () => {
   assert.equal(fake.calls.length, 3);
 
   const refused = (async () => new Response("false")) as typeof fetch;
-  const denied = createArrivalsService({ token: "bad", baseUrl: BASE, fetchImpl: refused });
+  const { arrivalsFor: denied } = createArrivalsService({ token: "bad", baseUrl: BASE, fetchImpl: refused });
   assert.deepEqual(await denied("1", NO_PATTERNS), { state: "auth_failed", lines: [] });
 
-  const broken = createArrivalsService({ token: "t", baseUrl: BASE, fetchImpl: fakeOlhoVivo(() => Response.json({ hr: "10:00", p: {} })).fetchImpl, now: time.now });
+  const { arrivalsFor: broken } = createArrivalsService({ token: "t", baseUrl: BASE, fetchImpl: fakeOlhoVivo(() => Response.json({ hr: "10:00", p: {} })).fetchImpl, now: time.now });
   assert.deepEqual(await broken("1", NO_PATTERNS), { state: "upstream_down", lines: [] });
 });
 
 test("the service adds GPS estimates and shares one position request between stops", async () => {
   const time = clock("2026-10-19T10:00:10-03:00");
   const fake = fakeOlhoVivo(() => Response.json({ hr: "10:00", p: null }), () => Response.json(POSITIONS));
-  const arrivalsFor = createArrivalsService({ token: "t", baseUrl: BASE, fetchImpl: fake.fetchImpl, now: time.now });
+  const { arrivalsFor } = createArrivalsService({ token: "t", baseUrl: BASE, fetchImpl: fake.fetchImpl, now: time.now });
   assert.deepEqual(await arrivalsFor("1", PATTERNS), GPS_ONLY);
   assert.deepEqual(await arrivalsFor("2", PATTERNS), GPS_ONLY);
   assert.equal(fake.calls.filter((call) => call === "/Posicao").length, 1);
@@ -102,12 +102,12 @@ test("the service adds GPS estimates and shares one position request between sto
 test("the service shows GPS estimates when the SPTrans forecast fails", async () => {
   const time = clock("2026-10-19T10:00:10-03:00");
   const fake = fakeOlhoVivo(() => new Response("", { status: 503 }), () => Response.json(POSITIONS));
-  const arrivalsFor = createArrivalsService({ token: "t", baseUrl: BASE, fetchImpl: fake.fetchImpl, now: time.now });
+  const { arrivalsFor } = createArrivalsService({ token: "t", baseUrl: BASE, fetchImpl: fake.fetchImpl, now: time.now });
   assert.deepEqual(await arrivalsFor("1", PATTERNS), GPS_ONLY);
 
   const failing = async (): Promise<StopPattern[]> => {
     throw new Error("database down");
   };
-  const offline = createArrivalsService({ token: "t", baseUrl: BASE, fetchImpl: fake.fetchImpl, now: time.now });
+  const { arrivalsFor: offline } = createArrivalsService({ token: "t", baseUrl: BASE, fetchImpl: fake.fetchImpl, now: time.now });
   assert.deepEqual(await offline("1", failing), { state: "upstream_down", lines: [] });
 });

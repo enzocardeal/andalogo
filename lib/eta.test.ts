@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
+  advanceMeters,
   averagePace,
   circularDirections,
   estimateLine,
   estimateStop,
   indexPositions,
   measure,
+  pointAt,
   project,
   segmentPaces,
   stopOffsets,
@@ -149,4 +151,30 @@ test("estimateStop picks the half of an out-and-back loop from the Olho Vivo sid
     ["back", Math.round((300 * 0.5 - 30) / 60)],
     ["out", Math.round(((2 * EAST_M + 2 * NORTH_M - 300) * 0.5 - 30) / 60)],
   ]);
+});
+
+test("advanceMeters walks segment paces and is the inverse of travelSeconds", () => {
+  const offsets = [100, 1100, 2100];
+  const paces = [0.1, 0.2];
+  assert.equal(advanceMeters(offsets, paces, 0.3, 500, 0), 500);
+  assert.equal(advanceMeters(offsets, paces, 0.3, 500, 40), 900);
+  assert.equal(advanceMeters(offsets, paces, 0.3, 500, 60), 1100);
+  assert.equal(advanceMeters(offsets, paces, 0.3, 500, 160), 1600);
+  assert.equal(advanceMeters(offsets, paces, 0.3, 500, 10_000), 2100);
+  assert.equal(advanceMeters(offsets, paces, 0.3, 0, 30), 100);
+  for (const seconds of [7, 55, 123]) {
+    const toM = advanceMeters(offsets, paces, 0.3, 300, seconds);
+    assert.equal(travelSeconds(offsets, paces, 0.3, 300, toM).toFixed(6), seconds.toFixed(6));
+  }
+});
+
+test("pointAt gives the position and the bearing along the shape", () => {
+  const route = measure(LINE);
+  const start = pointAt(route, 0);
+  assert.deepEqual([start.lat.toFixed(5), start.lon.toFixed(5), Math.round(start.bearing)], ["-23.55000", "-46.64000", 90]);
+  const corner = pointAt(route, EAST_M + 500);
+  assert.equal(Math.round(corner.bearing), 0);
+  assert.equal(corner.lon.toFixed(5), "-46.63000");
+  assert.equal(Math.round((corner.lat - B[0]) * 111_320), 500);
+  assert.deepEqual(pointAt(route, 1e9), { ...pointAt(route, route.cumulative.at(-1)!) });
 });
