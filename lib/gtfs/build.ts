@@ -1,4 +1,5 @@
-import { measure, stopOffsets } from "../eta.ts";
+import { measure, pointAt, stopOffsets } from "../eta.ts";
+import { meanBearing } from "../geo.ts";
 import { decodePolyline, encodePolyline, type LatLon } from "../polyline.ts";
 import type { MapStop } from "../stops-file.ts";
 import { FEED_PREFIX, RAIL_MODES, type Feed, type Mode } from "../transit.ts";
@@ -71,6 +72,7 @@ export type FeedInput = {
 type Trip = { routeId: string; directionId: number; headsign: string; serviceId: string; shapeId: string };
 
 const SHAPE_TOLERANCE_M = 5;
+const MIN_BEARING_AGREEMENT = 0.9;
 
 const MODE_PRIORITY: readonly Mode[] = ["metro", "cptm", "emtu", "bus"];
 const WEEKDAYS = ["monday", "tuesday", "wednesday", "thursday", "friday"];
@@ -181,6 +183,7 @@ export function buildFeed(feed: Feed, input: FeedInput): FeedTables {
         lon: Number(row.stop_lon),
         mode: served.mode,
         color: served.color,
+        bearing: null,
       });
     }
   }
@@ -218,11 +221,17 @@ export function buildFeed(feed: Feed, input: FeedInput): FeedTables {
   }
 
   const coordinates = new Map(stops.map((stop): [string, LatLon] => [stop.gtfs_stop_id, [stop.lat, stop.lon]]));
+  const bearings = new Map<string, number[]>();
   const patterns = buildPatterns(trips, input.tripStops).map(({ tripId, stopIds }): RoutePatternRow => {
     const trip = trips.get(tripId)!;
     const shape = input.shapes.get(trip.shapeId);
     const line = shape && shape.length >= 2 ? shape : stopIds.map((id) => coordinates.get(id)!);
     const polyline = encodePolyline(simplify(line, SHAPE_TOLERANCE_M));
+    const route = measure(decodePolyline(polyline));
+    const offsets = stopOffsets(route, stopIds.map((id) => coordinates.get(id)));
+    if (route.xy.length >= 2) {
+      stopIds.forEach((id, index) => bearings.set(id, [...(bearings.get(id) ?? []), pointAt(route, offsets[index]).bearing]));
+    }
     const { departures } = input.tripStops.get(tripId)!;
     return {
       route_id: routes.get(trip.routeId)!.id,
@@ -230,10 +239,14 @@ export function buildFeed(feed: Feed, input: FeedInput): FeedTables {
       headsign: trip.headsign,
       polyline,
       stop_ids: stopIds.map(idOf),
-      stop_offsets_m: stopOffsets(measure(decodePolyline(polyline)), stopIds.map((id) => coordinates.get(id))),
+      stop_offsets_m: offsets,
       run_time_s: departures.at(-1)! - departures[0],
     };
   });
+  for (const stop of stops) {
+    const mean = RAIL_MODES.includes(stop.mode) ? null : meanBearing(bearings.get(stop.gtfs_stop_id) ?? []);
+    stop.bearing = mean && mean.agreement >= MIN_BEARING_AGREEMENT ? mean.bearing : null;
+  }
 
   const timetables = buildTimetables(prefix, trips, input.tripStops, windows, services, routes, idOf);
 

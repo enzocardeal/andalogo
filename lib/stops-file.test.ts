@@ -6,11 +6,19 @@ test("encodeStops and decodeStops keep every field, with 5 decimal places", () =
   const stops: MapStop[] = [
     { id: "sp:18848", name: "Clínicas", lat: -23.5540221, lon: -46.6711089, mode: "metro", color: "#007E5E" },
     { id: "sp:1", name: "Rua A, 10", lat: -23.5, lon: -46.6, mode: "bus", color: null },
+    { id: "sp:2", name: "Av. Paulista, 1578", lat: -23.56, lon: -46.65, mode: "bus", color: null, bearing: 134 },
   ];
   const decoded = decodeStops(JSON.parse(encodeStops(stops)));
   assert.deepEqual(decoded, [
-    { ...stops[0], lat: -23.55402, lon: -46.67111 },
-    stops[1],
+    { ...stops[0], lat: -23.55402, lon: -46.67111, bearing: null },
+    { ...stops[1], bearing: null },
+    stops[2],
+  ]);
+});
+
+test("decodeStops reads files written before stops had a bearing", () => {
+  assert.deepEqual(decodeStops({ stops: [["sp:1", "A", 0, 0, 0]] }), [
+    { id: "sp:1", name: "A", lat: 0, lon: 0, mode: "bus", color: null, bearing: null },
   ]);
 });
 

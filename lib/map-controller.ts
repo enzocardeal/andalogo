@@ -1,7 +1,10 @@
 import type { GeoJSONSource, Map as MapLibreMap, StyleSpecification } from "maplibre-gl";
 import {
+  ARROW_IMAGE,
+  arrowColors,
   badgeRing,
   drawFavoriteBadge,
+  drawStopArrow,
   drawStopSign,
   EMPTY_COLLECTION,
   FAVORITE_IMAGE,
@@ -17,6 +20,7 @@ import type { MapStop } from "./stops-file.ts";
 
 const PIXEL_RATIO = 2;
 const BADGE_PIXELS = 36;
+const ARROW_PIXELS = 36;
 const SIGN_PIXELS = { width: 36, height: 50 };
 const SELECTED_SIGN_PIXELS = { width: 48, height: 64 };
 
@@ -51,6 +55,7 @@ export function createMapController(
   function addImages() {
     const badge = drawFavoriteBadge(canvasOf(BADGE_PIXELS, BADGE_PIXELS), badgeRing(current));
     map.addImage(FAVORITE_IMAGE, badge, { pixelRatio: PIXEL_RATIO });
+    map.addImage(ARROW_IMAGE, drawStopArrow(canvasOf(ARROW_PIXELS, ARROW_PIXELS), arrowColors(current)), { pixelRatio: PIXEL_RATIO });
     for (const [name, style] of Object.entries(signStyles(current))) {
       const size = style.outlineWidth > 2 ? SELECTED_SIGN_PIXELS : SIGN_PIXELS;
       map.addImage(name, drawStopSign(canvasOf(size.width, size.height), style), { pixelRatio: PIXEL_RATIO });

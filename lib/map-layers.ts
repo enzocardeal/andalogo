@@ -16,6 +16,7 @@ export const FAVORITE_LAYER = "favorite-stops";
 export const FAVORITE_SIGN_LAYER = "favorite-signs";
 export const FAVORITE_BADGE_LAYER = "favorite-badges";
 export const FAVORITE_IMAGE = "favorite-star";
+export const ARROW_IMAGE = "stop-arrow";
 export const CLICKABLE_LAYERS = [
   "rail-stations",
   BUS_STOPS_LAYER,
@@ -50,6 +51,8 @@ type Colors = {
   selected: string;
   routeStopFill: string;
   badgeRing: string;
+  arrow: string;
+  arrowOutline: string;
 };
 
 const COLORS: Record<Scheme, Colors> = {
@@ -62,6 +65,8 @@ const COLORS: Record<Scheme, Colors> = {
     selected: "#0f172a",
     routeStopFill: "#ffffff",
     badgeRing: "#ffffff",
+    arrow: "#1e293b",
+    arrowOutline: "#ffffff",
   },
   dark: {
     railFallback: "#cbd5e1",
@@ -72,6 +77,8 @@ const COLORS: Record<Scheme, Colors> = {
     selected: "#f8fafc",
     routeStopFill: "#1e293b",
     badgeRing: "#1e293b",
+    arrow: "#f1f5f9",
+    arrowOutline: "#0f172a",
   },
 };
 
@@ -85,7 +92,7 @@ export function stopsSource(stops: MapStop[]): GeoJSONSourceSpecification {
       features: stops.map((stop) => ({
         type: "Feature",
         geometry: { type: "Point", coordinates: [stop.lon, stop.lat] },
-        properties: { id: stop.id, name: stop.name, mode: stop.mode, color: stop.color },
+        properties: { id: stop.id, name: stop.name, mode: stop.mode, color: stop.color, bearing: stop.bearing ?? null },
       })),
     },
   };
@@ -171,6 +178,21 @@ export function overlayLayers(scheme: Scheme): LayerSpecification[] {
       minzoom: BUS_MIN_ZOOM,
       filter: stopFilters(null, [])[BUS_STOPS_LAYER],
       layout: { ...signLayout, "icon-size": ["interpolate", ["linear"], ["zoom"], 15, 0.75, 18, 1] },
+    },
+    {
+      id: "stop-arrows",
+      type: "symbol",
+      source: STOPS_SOURCE,
+      minzoom: BUS_MIN_ZOOM,
+      filter: ["all", IS_SIGN, ["!=", ["get", "bearing"], null]],
+      layout: {
+        "icon-image": ARROW_IMAGE,
+        "icon-rotate": ["get", "bearing"],
+        "icon-rotation-alignment": "map",
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+        "icon-size": ["interpolate", ["linear"], ["zoom"], 15, 0.75, 18, 1],
+      },
     },
     {
       id: FAVORITE_LAYER,
@@ -308,6 +330,29 @@ export function drawFavoriteBadge(canvas: HTMLCanvasElement, ring: string): Imag
   context.fillStyle = "#ffffff";
   context.fill();
   return context.getImageData(0, 0, size, size);
+}
+
+export function arrowColors(scheme: Scheme): { fill: string; outline: string } {
+  return { fill: COLORS[scheme].arrow, outline: COLORS[scheme].arrowOutline };
+}
+
+export function drawStopArrow(canvas: HTMLCanvasElement, colors: { fill: string; outline: string }): ImageData {
+  const { width, height } = canvas;
+  const context = canvas.getContext("2d")!;
+  context.clearRect(0, 0, width, height);
+  context.beginPath();
+  context.moveTo(width / 2, height * 0.08);
+  context.lineTo(width * 0.86, height * 0.88);
+  context.lineTo(width / 2, height * 0.68);
+  context.lineTo(width * 0.14, height * 0.88);
+  context.closePath();
+  context.lineJoin = "round";
+  context.lineWidth = width * 0.12;
+  context.strokeStyle = colors.outline;
+  context.stroke();
+  context.fillStyle = colors.fill;
+  context.fill();
+  return context.getImageData(0, 0, width, height);
 }
 
 export function badgeRing(scheme: Scheme): string {

@@ -95,6 +95,7 @@ test("buildFeed keeps served stops and gives a station the rail mode and color",
     lon: -46.6,
     mode: "bus",
     color: null,
+    bearing: 205,
   });
   assert.deepEqual(
     tables.routes.map(({ id, mode, color, text_color }) => ({ id, mode, color, text_color })),

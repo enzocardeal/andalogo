@@ -20,6 +20,7 @@ test("overlayLayers draws the route under the stops and the selection on top, in
       "rail-stations",
       "route-stops",
       "bus-stops",
+      "stop-arrows",
       "favorite-stops",
       "favorite-signs",
       "favorite-badges",
