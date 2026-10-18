@@ -1,6 +1,6 @@
 # andalogo
 
-A private transit map of São Paulo for a small group of friends. It shows bus, Metrô, CPTM and EMTU stops, and live bus arrivals from SPTrans Olho Vivo.
+A transit map of São Paulo. It shows bus, Metrô, CPTM and EMTU stops, and live bus arrivals from SPTrans Olho Vivo.
 
 Stack: Next.js on Vercel (`gru1`), Supabase (`sa-east-1`), MapLibre GL JS with OpenFreeMap tiles. The login, the invite gate, RLS and the keepalive cron follow [dividesperto](https://github.com/enzocardeal/dividesperto).
 
