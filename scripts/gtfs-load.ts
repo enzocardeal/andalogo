@@ -8,7 +8,7 @@ import { prepareArtesp } from "../lib/gtfs/artesp.ts";
 import { readShapes } from "../lib/gtfs/shapes.ts";
 import { readTripStops } from "../lib/gtfs/trips.ts";
 import { readAll } from "../lib/gtfs/zip.ts";
-import { encodeStops, STOPS_BUCKET } from "../lib/stops-file.ts";
+import { encodeStops, staleStopsFiles, STOPS_BUCKET } from "../lib/stops-file.ts";
 import { createAdminClient } from "../lib/supabase/admin.ts";
 import type { Feed } from "../lib/transit.ts";
 
@@ -82,6 +82,23 @@ try {
 
     await replaceFeed(sql, feed, tables, { sha256, stopsFile });
     console.log(`${feed}: loaded version ${sha256.slice(0, 12)}`);
+
+    const { data: files, error: listError } = await storage.from(STOPS_BUCKET).list();
+    if (listError) {
+      throw listError;
+    }
+    const stale = staleStopsFiles(
+      files.map((file) => file.name),
+      feed,
+      stopsFile,
+    );
+    if (stale.length > 0) {
+      const { error: removeError } = await storage.from(STOPS_BUCKET).remove(stale);
+      if (removeError) {
+        throw removeError;
+      }
+      console.log(`${feed}: deleted ${stale.join(", ")}`);
+    }
   }
 } finally {
   await sql.end();

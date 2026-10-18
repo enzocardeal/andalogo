@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { isGrandeSaoPaulo, prepareArtesp, shortStopName, titleCase } from "./artesp.ts";
+import { isGrandeSaoPaulo, latestZipUrl, prepareArtesp, shortStopName, titleCase } from "./artesp.ts";
 
 test("isGrandeSaoPaulo needs both end cities in Grande São Paulo", () => {
   assert.equal(isGrandeSaoPaulo("ITAPECERICA DA SERRA (PARQUE PARAISO) - SAO PAULO (METRO CAPAO REDONDO)"), true);
@@ -51,4 +51,14 @@ test("prepareArtesp keeps Grande São Paulo routes with the EMTU color and reada
   ]);
   assert.deepEqual(prepared.trips, [{ route_id: "001", trip_id: "a", trip_headsign: "Sao Paulo (Metro Butanta)" }]);
   assert.deepEqual(prepared.stops, [{ stop_id: "9", stop_name: "Rua A, 1" }]);
+});
+
+test("latestZipUrl picks the newest zip resource", () => {
+  const resources = [
+    { format: "zip", created: "2026-09-08T13:14:28", url: "https://x/september.zip" },
+    { format: "PNG", created: "2026-12-01T00:00:00", url: "https://x/cover.png" },
+    { format: "ZIP", created: "2026-10-07T12:56:28", url: "https://x/october.zip" },
+  ];
+  assert.equal(latestZipUrl(resources), "https://x/october.zip");
+  assert.equal(latestZipUrl([]), null);
 });

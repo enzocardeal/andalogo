@@ -32,3 +32,7 @@ export function decodeStops(body: unknown): MapStop[] {
     color: color ?? null,
   }));
 }
+
+export function staleStopsFiles(names: string[], feed: string, current: string): string[] {
+  return names.filter((name) => name.startsWith(`${feed}-`) && name.endsWith(".json") && name !== current);
+}

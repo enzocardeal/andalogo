@@ -100,3 +100,13 @@ export function prepareArtesp(input: { routes: Row[]; trips: Row[]; stops: Row[]
   const stops = input.stops.map((stop): Row => ({ ...stop, stop_name: shortStopName(stop.stop_name) }));
   return { routes, trips, stops };
 }
+
+export const ARTESP_PACKAGE_URL = "https://dadosabertos.artesp.sp.gov.br/api/3/action/package_show?id=gtfs";
+
+export type CkanResource = { format: string; created: string; url: string };
+
+export function latestZipUrl(resources: CkanResource[]): string | null {
+  const zips = resources.filter((resource) => resource.format.toLowerCase() === "zip");
+  zips.sort((a, b) => b.created.localeCompare(a.created));
+  return zips[0]?.url ?? null;
+}

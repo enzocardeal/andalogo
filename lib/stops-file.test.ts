@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { decodeStops, encodeStops, type MapStop } from "./stops-file.ts";
+import { decodeStops, encodeStops, staleStopsFiles, type MapStop } from "./stops-file.ts";
 
 test("encodeStops and decodeStops keep every field, with 5 decimal places", () => {
   const stops: MapStop[] = [
@@ -22,4 +22,10 @@ test("encodeStops leaves out an empty color", () => {
 test("decodeStops refuses a body without stops", () => {
   assert.throws(() => decodeStops(null));
   assert.throws(() => decodeStops({ stops: "x" }));
+});
+
+test("staleStopsFiles keeps the current file and the files of other feeds", () => {
+  const names = ["sptrans-aaa.json", "sptrans-bbb.json", "artesp-ccc.json", "sptrans-notes.txt"];
+  assert.deepEqual(staleStopsFiles(names, "sptrans", "sptrans-bbb.json"), ["sptrans-aaa.json"]);
+  assert.deepEqual(staleStopsFiles(names, "artesp", "artesp-ccc.json"), []);
 });

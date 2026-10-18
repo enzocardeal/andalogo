@@ -17,7 +17,8 @@
     "test:rls": "node --test scripts/rls-test.ts",
     "gtfs:inspect": "node scripts/gtfs-inspect.ts",
     "idmap:check": "node --env-file-if-exists=.env.local scripts/idmap-check.ts",
-    "gtfs:load": "node --env-file-if-exists=.env.local scripts/gtfs-load.ts"
+    "gtfs:load": "node --env-file-if-exists=.env.local scripts/gtfs-load.ts",
+    "artesp:url": "node scripts/artesp-url.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

@@ -1,0 +1,37 @@
+name: GTFS refresh
+
+on:
+  schedule:
+    - cron: "0 12 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: gtfs-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      OLHOVIVO_TOKEN: ${{ secrets.OLHOVIVO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Download the feeds
+        run: |
+          mkdir -p data/sptrans data/artesp
+          curl -fsSL --retry 3 -o data/sptrans/gtfs.zip "https://www.sptrans.com.br/umbraco/Surface/PerfilDesenvolvedor/BaixarGTFS?memberName=sptrans"
+          curl -fsSL --retry 3 -o data/artesp/gtfs.zip "$(npm run --silent artesp:url)"
+      - run: npm run gtfs:load -- --feed sptrans --zip data/sptrans/gtfs.zip
+      - run: npm run gtfs:load -- --feed artesp --zip data/artesp/gtfs.zip
+      - name: Check the GTFS and Olho Vivo IDs
+        if: env.OLHOVIVO_TOKEN != ''
+        run: npm run idmap:check -- --gtfs data/sptrans/gtfs.zip

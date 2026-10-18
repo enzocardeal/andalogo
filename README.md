@@ -82,6 +82,19 @@ The secret keys must never get the `NEXT_PUBLIC_` prefix.
 - `invited_emails` holds at most 11 rows. A trigger refuses the 12th. The app cannot delete a row. Delete a wrong email by hand in the SQL editor.
 - To close invites, remove `INVITE_CODE` in Vercel and deploy again. `/api/invite` then returns 404.
 
+## Automatic GTFS refresh
+
+`.github/workflows/gtfs-refresh.yml` runs every Monday at 12:00 UTC (09:00 in São Paulo), and on demand from the Actions tab. It downloads both feeds and runs `gtfs:load` for each one. A load skips a feed when its sha256 has not changed. When the `OLHOVIVO_TOKEN` secret exists, the job also runs `idmap:check` and fails when a check passes less than 95 %. GitHub sends an email when the job fails.
+
+The workflow needs these repository secrets (Settings → Secrets and variables → Actions):
+
+| Secret | Value |
+|---|---|
+| `SUPABASE_DB_URL` | Session pooler connection string, the same as in `.env.local` |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase API URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Secret key, used to upload the stops file |
+| `OLHOVIVO_TOKEN` | Optional. Turns on the ID check. |
+
 ## Keepalive
 
 `vercel.json` calls `/api/cron/keepalive` every day at 09:00 UTC. The route reads one auth user, so the free Supabase project does not pause after 7 days without traffic.
@@ -107,7 +120,7 @@ Download a feed into its own folder under `data/` (Git ignores it):
 ```sh
 mkdir -p data/sptrans data/artesp
 curl -L -o data/sptrans/gtfs.zip "https://www.sptrans.com.br/umbraco/Surface/PerfilDesenvolvedor/BaixarGTFS?memberName=sptrans"
-curl -L -o data/artesp/gtfs.zip "https://dadosabertos.artesp.sp.gov.br/dataset/92e8bb31-df66-4700-ad9a-42a48f04fb7f/resource/3918f5ec-206d-4826-8a88-5d9f6f791fe2/download/artesp_gtfs.zip"
+curl -L -o data/artesp/gtfs.zip "$(npm run --silent artesp:url)"
 ```
 
 `npm run gtfs:inspect -- <feed.zip> …` prints the files, routes by type, rail lines, stops, trips, frequencies and shapes of each feed.
@@ -119,7 +132,7 @@ curl -L -o data/artesp/gtfs.zip "https://dadosabertos.artesp.sp.gov.br/dataset/9
 3. It uploads the stops file for the map to the public Storage bucket `gtfs`, and creates the bucket when it is missing.
 4. In one transaction, it replaces the rows of the feed and records the version in `feed_versions`. The app reads the old rows until the commit.
 
-Run it again when SPTrans or ARTESP publishes a new feed. SPTrans changes about once a week, ARTESP about once a month.
+SPTrans changes the feed about once a week and ARTESP about once a month. ARTESP publishes each month as a new resource, so `npm run artesp:url` asks the ARTESP catalog API for the newest zip. After a load, the script deletes the older stops files of that feed from Storage.
 
 `npm run idmap:check -- --gtfs data/sptrans/gtfs.zip` checks that GTFS IDs match Olho Vivo IDs. It needs `OLHOVIVO_TOKEN` in `.env.local`. Run it on a weekday between 08:00 and 19:00. It checks three hypotheses on 100 random bus stops and 20 corridor stops:
 
