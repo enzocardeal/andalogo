@@ -39,7 +39,7 @@ export function RouteSheet({ route, failed, dir, onDirection, onStop, onClose }:
         </div>
         <CloseButton label={strings.route.close} onClick={onClose} />
       </header>
-      <div className="flex flex-col gap-2 overflow-y-auto px-4 pb-4">
+      <div className="flex min-h-0 flex-col gap-2 overflow-y-auto overscroll-contain px-4 pb-4">
         {other && (
           <button
             type="button"

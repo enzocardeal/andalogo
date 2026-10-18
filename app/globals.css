@@ -5,6 +5,11 @@
   color-scheme: light dark;
 }
 
+html,
+body {
+  overscroll-behavior: none;
+}
+
 @media (prefers-color-scheme: dark) {
   .maplibregl-map .maplibregl-ctrl-group,
   .maplibregl-map .maplibregl-ctrl-attrib.maplibregl-compact {

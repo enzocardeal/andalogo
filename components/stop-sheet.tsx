@@ -89,7 +89,7 @@ export function StopSheet({ stopId, onClose, onRoute, onFavoriteChange }: StopSh
           <CloseButton label={strings.stop.close} onClick={onClose} />
         </div>
       </header>
-      <div className="overflow-y-auto px-4 pb-4">
+      <div className="min-h-0 overflow-y-auto overscroll-contain px-4 pb-4">
         {favoriteFailed && (
           <p role="alert" className="mb-2 text-sm text-red-700 dark:text-red-400">
             {strings.stop.favoriteFailed}

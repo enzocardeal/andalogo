@@ -79,7 +79,7 @@ export function MapSearch({ onRoute, onStop }: MapSearchProps) {
         )}
       </div>
       {current && (
-        <div className="max-h-[50dvh] overflow-y-auto rounded-lg bg-white dark:bg-neutral-900 p-2 shadow-md">
+        <div className="max-h-[50dvh] overflow-y-auto overscroll-contain rounded-lg bg-white dark:bg-neutral-900 p-2 shadow-md">
           <SearchResults found={current} onRoute={(id) => choose(() => onRoute(id))} onStop={(id) => choose(() => onStop(id))} />
         </div>
       )}
