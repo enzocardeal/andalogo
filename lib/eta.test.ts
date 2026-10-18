@@ -84,6 +84,8 @@ test("segmentPaces blends calibrated paces with the line mean and the GTFS avera
   const base = { stop_offsets_m: [0, 1000, 2000], run_time_s: 600 };
   assert.deepEqual(segmentPaces(base), { paces: [0.3, 0.3], fallback: 0.3 });
   assert.deepEqual(segmentPaces({ ...base, paces: [120], samples: [50] }), { paces: [0.3, 0.3], fallback: 0.3 });
+  assert.deepEqual(segmentPaces({ ...base, factor: 0.5 }), { paces: [0.15, 0.15], fallback: 0.15 });
+  assert.deepEqual(segmentPaces({ ...base, factor: 0.01 }), { paces: [0.06, 0.06], fallback: 0.06 });
   const { paces, fallback } = segmentPaces({ ...base, paces: [120, 0], samples: [50, 0] });
   const line = (25 * 0.12 + 3 * 0.3) / 28;
   assert.equal(fallback.toFixed(6), line.toFixed(6));

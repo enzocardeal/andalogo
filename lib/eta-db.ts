@@ -50,6 +50,7 @@ export async function savePaces(sql: Sql, drained: Totals[]): Promise<number> {
               samples = excluded.samples,
               updated_at = now()`;
     }
+    await sql`select public.refresh_eta_factors(${dayType}, ${hour})`;
     written += rows.length;
   }
   return written;

@@ -29,6 +29,7 @@ export type StopPattern = {
   circular: boolean;
   paces?: number[] | null;
   samples?: number[] | null;
+  factor?: number | null;
 };
 
 export type PositionIndex = Map<string, PositionLine["vs"]>;
@@ -106,7 +107,7 @@ export function segmentPaces(pattern: Omit<StopPattern, "route_id" | "direction_
 } {
   const offsets = pattern.stop_offsets_m;
   const lengths = offsets.slice(1).map((offset, k) => offset - offsets[k]);
-  const gtfs = averagePace(pattern);
+  const gtfs = pattern.factor ? clampPace(averagePace(pattern) * pattern.factor) : averagePace(pattern);
   const { paces, samples } = pattern;
   if (!paces || !samples || paces.length !== lengths.length || samples.length !== lengths.length) {
     return { paces: lengths.map(() => gtfs), fallback: gtfs };
