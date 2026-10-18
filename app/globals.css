@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+@layer base {
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary,
+  select:not(:disabled),
+  a[href]:not([aria-disabled="true"]),
+  label:has(input:is([type="radio"], [type="checkbox"]):not(:disabled)) {
+    cursor: pointer;
+    transition-property: opacity, transform;
+    transition-duration: 100ms;
+
+    &:active {
+      opacity: 0.85;
+
+      @media (prefers-reduced-motion: no-preference) {
+        transform: scale(0.97);
+      }
+    }
+  }
+
+  button:disabled,
+  [role="button"][aria-disabled="true"],
+  select:disabled,
+  label:has(input:is([type="radio"], [type="checkbox"]):disabled) {
+    cursor: not-allowed;
+  }
+}
