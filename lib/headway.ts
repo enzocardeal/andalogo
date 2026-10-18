@@ -22,7 +22,7 @@ export function departureLabel(waitS: number, now: Date): string {
   return CLOCK.format(new Date(now.getTime() + waitS * 1000));
 }
 
-function liveLabel(minutes: number): string {
+export function liveLabel(minutes: number): string {
   return minutes === 0 ? strings.stop.now : `${minutes} min`;
 }
 

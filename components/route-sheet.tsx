@@ -3,7 +3,9 @@
 import { Fragment, useEffect, useRef, type CSSProperties } from "react";
 import { CloseButton, Sheet } from "@/components/stop-sheet";
 import { LineBadge } from "@/components/line-badge";
+import { LiveTime } from "@/components/line-summary";
 import { passedStops } from "@/lib/bus-motion";
+import { liveLabel } from "@/lib/headway";
 import { BUS_ICON_SVG } from "@/lib/live-icon";
 import { DEFAULT_ROUTE_COLOR, patternOf } from "@/lib/map-view";
 import { strings } from "@/lib/strings";
@@ -17,6 +19,7 @@ type RouteSheetProps = {
   dir: number;
   selectedStopId: string | null;
   progress: RouteProgress | null;
+  arrivalMinutes: number | null;
   onDirection: (dir: number) => void;
   onStop: (stopId: string) => void;
   onClose: () => void;
@@ -25,7 +28,17 @@ type RouteSheetProps = {
 const CHECK_SVG =
   '<svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 6.5 5 9l4.5-6"/></svg>';
 
-export function RouteSheet({ route, failed, dir, selectedStopId, progress, onDirection, onStop, onClose }: RouteSheetProps) {
+export function RouteSheet({
+  route,
+  failed,
+  dir,
+  selectedStopId,
+  progress,
+  arrivalMinutes,
+  onDirection,
+  onStop,
+  onClose,
+}: RouteSheetProps) {
   const pattern = route ? patternOf(route, dir) : null;
   const other = route?.patterns.find((candidate) => candidate.direction_id !== pattern?.direction_id) ?? null;
   const color = route?.color ?? DEFAULT_ROUTE_COLOR;
@@ -123,15 +136,16 @@ export function RouteSheet({ route, failed, dir, selectedStopId, progress, onDir
                             style={{ borderColor: color }}
                           />
                         )}
-                        <span
-                          className={`truncate ${ticked ? "text-neutral-400 dark:text-neutral-500" : ""} ${selected ? "font-semibold" : ""}`}
-                        >
-                          {stop.name}
-                          {ticked && <span className="sr-only"> ({strings.route.passed})</span>}
+                        <span className="flex min-w-0 flex-1 flex-col">
+                          <span
+                            className={`truncate ${ticked ? "text-neutral-400 dark:text-neutral-500" : ""} ${selected ? "font-semibold" : ""}`}
+                          >
+                            {stop.name}
+                            {ticked && <span className="sr-only"> ({strings.route.passed})</span>}
+                          </span>
+                          {selected && <span className="text-xs text-neutral-500 dark:text-neutral-400">{strings.route.yourStop}</span>}
                         </span>
-                        {selected && (
-                          <span className="shrink-0 text-xs text-neutral-500 dark:text-neutral-400">{strings.route.yourStop}</span>
-                        )}
+                        {selected && arrivalMinutes !== null && <LiveTime label={liveLabel(arrivalMinutes)} />}
                       </button>
                     </li>
                   </Fragment>

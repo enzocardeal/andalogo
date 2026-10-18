@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { departureLabel, headwayLabel, lineTimes } from "./headway.ts";
+import { departureLabel, headwayLabel, lineTimes, liveLabel } from "./headway.ts";
 
 const NOON = new Date("2026-10-19T12:00:00-03:00");
 
@@ -57,4 +57,9 @@ test("lineTimes shows live vehicles first, and the schedule when no vehicle is l
     muted: false,
     live: false,
   });
+});
+
+test("liveLabel shows now or the minutes", () => {
+  assert.equal(liveLabel(0), "agora");
+  assert.equal(liveLabel(7), "7 min");
 });

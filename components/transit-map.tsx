@@ -392,6 +392,7 @@ export function TransitMap() {
           dir={view.dir}
           selectedStopId={view.stop}
           progress={lineTracks && busAlongM !== null ? { offsets: lineTracks.stopOffsetsM, alongM: busAlongM } : null}
+          arrivalMinutes={nextLineBus?.minutes ?? null}
           onDirection={(dir) => navigate({ dir })}
           onStop={(id) => navigate({ stop: id, route: null }, "push")}
           onClose={() => close({ route: null })}

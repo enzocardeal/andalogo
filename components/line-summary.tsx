@@ -3,6 +3,15 @@ import { lineTimes } from "@/lib/headway";
 import { LIVE_ICON_SVG } from "@/lib/live-icon";
 import type { StopLine } from "@/lib/transit";
 
+export function LiveTime({ label }: { label: string }) {
+  return (
+    <span className="flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md border border-green-600/50 px-1.5 py-0.5 text-sm font-semibold text-green-700 tabular-nums dark:border-green-400/50 dark:text-green-400">
+      <span className="size-3.5" dangerouslySetInnerHTML={{ __html: LIVE_ICON_SVG }} />
+      {label}
+    </span>
+  );
+}
+
 export function LineSummary({ line, now, live = null }: { line: StopLine; now: Date; live?: LiveLine | null }) {
   const times = lineTimes(line, now, live);
   return (
@@ -20,10 +29,7 @@ export function LineSummary({ line, now, live = null }: { line: StopLine; now: D
         )}
       </span>
       {times.live ? (
-        <span className="flex shrink-0 items-center gap-1 rounded-md border border-green-600/50 px-1.5 py-0.5 text-sm font-semibold text-green-700 tabular-nums dark:border-green-400/50 dark:text-green-400">
-          <span className="size-3.5" dangerouslySetInnerHTML={{ __html: LIVE_ICON_SVG }} />
-          {times.main}
-        </span>
+        <LiveTime label={times.main} />
       ) : (
         <span
           className={`shrink-0 text-sm tabular-nums ${
