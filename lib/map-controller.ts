@@ -1,7 +1,7 @@
 import type { GeoJSONSource, Map as MapLibreMap, StyleSpecification } from "maplibre-gl";
 import {
   ARROW_IMAGE,
-  arrowColors,
+  arrowColor,
   badgeRing,
   drawFavoriteBadge,
   drawStopArrow,
@@ -55,7 +55,7 @@ export function createMapController(
   function addImages() {
     const badge = drawFavoriteBadge(canvasOf(BADGE_PIXELS, BADGE_PIXELS), badgeRing(current));
     map.addImage(FAVORITE_IMAGE, badge, { pixelRatio: PIXEL_RATIO });
-    map.addImage(ARROW_IMAGE, drawStopArrow(canvasOf(ARROW_PIXELS.width, ARROW_PIXELS.height), arrowColors(current)), { pixelRatio: PIXEL_RATIO });
+    map.addImage(ARROW_IMAGE, drawStopArrow(canvasOf(ARROW_PIXELS.width, ARROW_PIXELS.height), arrowColor(current)), { pixelRatio: PIXEL_RATIO });
     for (const [name, style] of Object.entries(signStyles(current))) {
       const size = style.outlineWidth > 2 ? SELECTED_SIGN_PIXELS : SIGN_PIXELS;
       map.addImage(name, drawStopSign(canvasOf(size.width, size.height), style), { pixelRatio: PIXEL_RATIO });

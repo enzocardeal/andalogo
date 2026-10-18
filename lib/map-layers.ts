@@ -51,8 +51,6 @@ type Colors = {
   selected: string;
   routeStopFill: string;
   badgeRing: string;
-  arrow: string;
-  arrowOutline: string;
 };
 
 const COLORS: Record<Scheme, Colors> = {
@@ -65,8 +63,6 @@ const COLORS: Record<Scheme, Colors> = {
     selected: "#0f172a",
     routeStopFill: "#ffffff",
     badgeRing: "#ffffff",
-    arrow: "#1e293b",
-    arrowOutline: "#ffffff",
   },
   dark: {
     railFallback: "#cbd5e1",
@@ -77,8 +73,6 @@ const COLORS: Record<Scheme, Colors> = {
     selected: "#f8fafc",
     routeStopFill: "#1e293b",
     badgeRing: "#1e293b",
-    arrow: "#f1f5f9",
-    arrowOutline: "#0f172a",
   },
 };
 
@@ -333,11 +327,11 @@ export function drawFavoriteBadge(canvas: HTMLCanvasElement, ring: string): Imag
   return context.getImageData(0, 0, size, size);
 }
 
-export function arrowColors(scheme: Scheme): { fill: string; outline: string } {
-  return { fill: COLORS[scheme].arrow, outline: COLORS[scheme].arrowOutline };
+export function arrowColor(scheme: Scheme): string {
+  return COLORS[scheme].pole;
 }
 
-export function drawStopArrow(canvas: HTMLCanvasElement, colors: { fill: string; outline: string }): ImageData {
+export function drawStopArrow(canvas: HTMLCanvasElement, color: string): ImageData {
   const { width, height } = canvas;
   const context = canvas.getContext("2d")!;
   const middle = width / 2;
@@ -346,25 +340,19 @@ export function drawStopArrow(canvas: HTMLCanvasElement, colors: { fill: string;
   context.clearRect(0, 0, width, height);
   context.lineCap = "round";
   context.lineJoin = "round";
-  const draw = (color: string, extra: number) => {
-    context.strokeStyle = color;
-    context.fillStyle = color;
-    context.lineWidth = width * 0.17 + extra;
-    context.beginPath();
-    context.moveTo(middle, height - outline);
-    context.lineTo(middle, head);
-    context.stroke();
-    context.beginPath();
-    context.moveTo(middle, outline);
-    context.lineTo(width - outline, head + outline);
-    context.lineTo(outline, head + outline);
-    context.closePath();
-    context.lineWidth = extra || 1;
-    context.stroke();
-    context.fill();
-  };
-  draw(colors.outline, outline * 2);
-  draw(colors.fill, 0);
+  context.strokeStyle = color;
+  context.fillStyle = color;
+  context.lineWidth = width * 0.18;
+  context.beginPath();
+  context.moveTo(middle, height - outline);
+  context.lineTo(middle, head);
+  context.stroke();
+  context.beginPath();
+  context.moveTo(middle, outline);
+  context.lineTo(width - outline, head + outline);
+  context.lineTo(outline, head + outline);
+  context.closePath();
+  context.fill();
   return context.getImageData(0, 0, width, height);
 }
 
