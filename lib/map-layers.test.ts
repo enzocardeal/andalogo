@@ -10,6 +10,7 @@ import {
   signStyles,
   stopFilters,
   STOPS_SOURCE,
+  TRIP_SOURCE,
 } from "./map-layers.ts";
 
 test("overlayLayers draws the route under the stops and the selection on top, in both schemes", () => {
@@ -17,7 +18,10 @@ test("overlayLayers draws the route under the stops and the selection on top, in
     const ids = overlayLayers(scheme).map((layer) => layer.id);
     assert.deepEqual(ids, [
       "route-line",
+      "trip-walk",
+      "trip-ride",
       "rail-stations",
+      "trip-points",
       "route-stops",
       "stop-arrows",
       "bus-stops",
@@ -34,9 +38,9 @@ test("overlayLayers draws the route under the stops and the selection on top, in
   }
 });
 
-test("overlayLayers uses only the stops and route sources", () => {
+test("overlayLayers uses only the stops, route and trip sources", () => {
   const sources = new Set(overlayLayers("light").map((layer) => ("source" in layer ? layer.source : null)));
-  assert.deepEqual([...sources].sort(), [ROUTE_SOURCE, STOPS_SOURCE].sort());
+  assert.deepEqual([...sources].sort(), [ROUTE_SOURCE, STOPS_SOURCE, TRIP_SOURCE].sort());
 });
 
 test("every sign image has a style in both schemes, with a stronger outline when selected", () => {

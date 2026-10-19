@@ -11,6 +11,7 @@ import {
   overlayLayers,
   ROUTE_SOURCE,
   signStyles,
+  TRIP_SOURCE,
   stopFilters,
   STOPS_SOURCE,
   stopsSource,
@@ -30,6 +31,7 @@ export type MapController = {
   setSelected(stopId: string | null): void;
   setFavorites(stopIds: Iterable<string>): void;
   setRoute(data: GeoJSON.FeatureCollection): void;
+  setTrip(data: GeoJSON.FeatureCollection): void;
 };
 
 function canvasOf(width: number, height: number): HTMLCanvasElement {
@@ -51,6 +53,7 @@ export function createMapController(
   let selected: string | null = null;
   let favorites: string[] = [];
   let route = EMPTY_COLLECTION;
+  let trip = EMPTY_COLLECTION;
 
   function addImages() {
     const badge = drawFavoriteBadge(canvasOf(BADGE_PIXELS, BADGE_PIXELS), badgeRing(current));
@@ -66,6 +69,7 @@ export function createMapController(
     addImages();
     map.addSource(STOPS_SOURCE, stops ? stopsSource(stops) : { type: "geojson", data: EMPTY_COLLECTION });
     map.addSource(ROUTE_SOURCE, { type: "geojson", data: route });
+    map.addSource(TRIP_SOURCE, { type: "geojson", data: trip });
     for (const layer of overlayLayers(current)) {
       map.addLayer(layer);
     }
@@ -113,6 +117,10 @@ export function createMapController(
     setRoute(data) {
       route = data;
       map.getSource<GeoJSONSource>(ROUTE_SOURCE)?.setData(data);
+    },
+    setTrip(data) {
+      trip = data;
+      map.getSource<GeoJSONSource>(TRIP_SOURCE)?.setData(data);
     },
   };
 }

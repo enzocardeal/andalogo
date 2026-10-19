@@ -8,6 +8,7 @@ import { MapSearch } from "@/components/map-search";
 import { PlaceSheet } from "@/components/place-sheet";
 import { RouteSheet } from "@/components/route-sheet";
 import { StopSheet } from "@/components/stop-sheet";
+import { TripSheet } from "@/components/trip-sheet";
 import { nextBuses } from "@/lib/arrivals";
 import { lineMotion, type MovingBus } from "@/lib/bus-motion";
 import { busLabel, createBusLayer, type BusLayer, type ShownBus } from "@/lib/live-markers";
@@ -18,9 +19,11 @@ import { loadFavoriteIds, loadMapStops } from "@/lib/map-stops";
 import { transitStyle } from "@/lib/map-style";
 import { DEFAULT_ROUTE_COLOR, mapHref, parseMapView, routeGeoJSON, SHEET_SHARE, type MapView } from "@/lib/map-view";
 import { nearbyStops } from "@/lib/places";
+import type { Trip } from "@/lib/router/trips";
 import type { MapStop } from "@/lib/stops-file";
 import { strings } from "@/lib/strings";
 import { createClient } from "@/lib/supabase/client";
+import { tripGeoJSON } from "@/lib/trip-view";
 import type { RouteDetails, StopDetails, StopLine } from "@/lib/transit";
 import { useArrivals } from "@/lib/use-arrivals";
 import { useBusProgress } from "@/lib/use-bus-progress";
@@ -86,6 +89,8 @@ export function TransitMap() {
   const maplibreRef = useRef<typeof import("maplibre-gl") | null>(null);
   const framedRef = useRef<string | null>(null);
   const placeFramedRef = useRef<string | null>(null);
+  const pickingRef = useRef(false);
+  const tripFramedRef = useRef<Trip | null>(null);
   const busLayerRef = useRef<BusLayer | null>(null);
   const controllerRef = useRef<MapController | null>(null);
   const stopsRef = useRef(new Map<string, MapStop>());
@@ -95,6 +100,9 @@ export function TransitMap() {
   const [favorites, setFavorites] = useState<ReadonlySet<string>>(new Set());
   const [stopLines, setStopLines] = useState<{ stopId: string; lines: StopLine[] } | null>(null);
   const [stopCount, setStopCount] = useState(0);
+  const [pickingOrigin, setPickingOrigin] = useState(false);
+  const [shownTrip, setShownTrip] = useState<Trip | null>(null);
+  const [tripRoutes, setTripRoutes] = useState<{ trip: Trip; routes: Map<string, RouteDetails> } | null>(null);
 
   const selectedStop = ready && view.stop ? stopsRef.current.get(view.stop) : undefined;
   const arrivals = useArrivals(selectedStop?.mode === "bus" && selectedStop.id.startsWith("sp:") ? selectedStop.id : null);
@@ -204,7 +212,12 @@ export function TransitMap() {
         });
         map.on("click", CLICKABLE_LAYERS, (event) => {
           const id = event.features?.[0]?.properties.id;
-          if (typeof id === "string") {
+          const trip = viewRef.current.trip;
+          const stop = typeof id === "string" ? stopsRef.current.get(id) : undefined;
+          if (trip && pickingRef.current && stop) {
+            setPickingOrigin(false);
+            navigate({ trip: { ...trip, from: { lat: stop.lat, lon: stop.lon, label: stop.name } } });
+          } else if (typeof id === "string" && !trip) {
             navigate({ stop: id }, viewRef.current.stop ? "replace" : "push");
           }
         });
@@ -276,6 +289,10 @@ export function TransitMap() {
       return;
     }
     const layer = (busLayerRef.current ??= createBusLayer(maplibregl, map));
+    if (view.trip) {
+      layer.update([]);
+      return;
+    }
     const motions = new Map(tracks.map((line) => [`${line.routeId}|${line.directionId}`, { line, motion: lineMotion(line) }]));
     const moving = (routeId: string, directionId: number, p: string): MovingBus | null => {
       const entry = motions.get(`${routeId}|${directionId}`);
@@ -336,7 +353,7 @@ export function TransitMap() {
         });
       }
     }
-  }, [ready, arrivals, selectedStop, stopLines, tracks, route, view.stop, view.route, view.dir]);
+  }, [ready, arrivals, selectedStop, stopLines, tracks, route, view.stop, view.route, view.dir, view.trip]);
 
   useEffect(() => {
     if (!view.route) {
@@ -427,6 +444,61 @@ export function TransitMap() {
     });
   }, [ready, nearby, nearLat, nearLon, view.stop, view.route]);
 
+  useEffect(() => {
+    pickingRef.current = pickingOrigin;
+  });
+
+  useEffect(() => {
+    if (!shownTrip) {
+      return;
+    }
+    const trip = shownTrip;
+    const lineIds = [...new Set(trip.legs.flatMap((leg) => (leg.kind === "ride" ? [leg.line.id] : [])))];
+    let cancelled = false;
+    Promise.all(
+      lineIds.map(async (routeId) => {
+        const { data, error: rpcError } = await createClient().rpc("get_route", { p_route_id: routeId });
+        if (rpcError) {
+          console.error("get_route failed:", rpcError.message);
+        }
+        return [routeId, data as RouteDetails | null] as const;
+      }),
+    ).then((found) => {
+      if (!cancelled) {
+        setTripRoutes({ trip, routes: new Map(found.flatMap(([routeId, details]) => (details ? [[routeId, details]] : []))) });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [shownTrip]);
+
+  const tripKey = view.trip ? JSON.stringify(view.trip) : null;
+  const shownRoutes = tripRoutes && tripRoutes.trip === shownTrip ? tripRoutes.routes : undefined;
+  useEffect(() => {
+    const map = mapRef.current;
+    const controller = controllerRef.current;
+    if (!ready || !map || !controller) {
+      return;
+    }
+    if (!tripKey || !shownTrip) {
+      tripFramedRef.current = null;
+      controller.setTrip(EMPTY_COLLECTION);
+      return;
+    }
+    const { bounds, data } = tripGeoJSON(shownTrip, shownRoutes);
+    controller.setTrip(data);
+    if (tripFramedRef.current === shownTrip) {
+      return;
+    }
+    tripFramedRef.current = shownTrip;
+    const height = map.getContainer().clientHeight;
+    stopFollowing(map);
+    map.fitBounds(bounds, { padding: { top: SEARCH_HEIGHT + 24, bottom: Math.round(height * SHEET_SHARE) + 24, left: 40, right: 40 }, maxZoom: STOP_ZOOM });
+  }, [ready, tripKey, shownTrip, shownRoutes]);
+
+  const showTrip = useCallback((trip: Trip | null) => setShownTrip(trip), []);
+
   function changeFavorite(stopId: string, favorite: boolean) {
     setFavorites((current) => {
       const next = new Set(current);
@@ -445,9 +517,24 @@ export function TransitMap() {
         <div ref={container} aria-label={strings.map.label} className="h-full w-full" />
       </div>
       <MapSearch
-        onRoute={(id) => navigate({ route: id, dir: 0, stop: null, near: null }, "push")}
-        onStop={(id) => navigate({ stop: id, route: null, near: null }, "push")}
-        onPlace={(place) => navigate({ near: { lat: place.lat, lon: place.lon, label: place.name }, stop: null, route: null }, "push")}
+        onRoute={(id) => navigate({ route: id, dir: 0, stop: null, near: null, trip: null }, "push")}
+        onStop={(id) => {
+          const stop = stopsRef.current.get(id);
+          if (view.trip && pickingOrigin && stop) {
+            setPickingOrigin(false);
+            navigate({ trip: { ...view.trip, from: { lat: stop.lat, lon: stop.lon, label: stop.name } } });
+          } else {
+            navigate({ stop: id, route: null, near: null, trip: null }, "push");
+          }
+        }}
+        onPlace={(place) => {
+          if (view.trip && pickingOrigin) {
+            setPickingOrigin(false);
+            navigate({ trip: { ...view.trip, from: { lat: place.lat, lon: place.lon, label: place.name } } });
+          } else {
+            navigate({ near: { lat: place.lat, lon: place.lon, label: place.name }, stop: null, route: null, trip: null }, "push");
+          }
+        }}
         bias={() => {
           const center = mapRef.current?.getCenter();
           return center ? { lat: center.lat, lon: center.lng } : null;
@@ -461,7 +548,23 @@ export function TransitMap() {
           {error === "map" ? strings.map.failed : strings.map.stopsFailed}
         </p>
       )}
-      {view.route ? (
+      {view.trip ? (
+        <TripSheet
+          trip={view.trip}
+          pickingOrigin={pickingOrigin}
+          onPickOrigin={() => {
+            setPickingOrigin(true);
+            document.getElementById("map-search")?.focus();
+          }}
+          onUseMyLocation={() => navigate({ trip: { ...view.trip!, from: null } })}
+          onTime={(at) => navigate({ trip: { ...view.trip!, at } })}
+          onShow={showTrip}
+          onClose={() => {
+            setPickingOrigin(false);
+            close({ trip: null });
+          }}
+        />
+      ) : view.route ? (
         <RouteSheet
           route={route?.route ?? null}
           failed={route?.failed ?? false}
@@ -481,6 +584,7 @@ export function TransitMap() {
           onClose={() => close({ stop: null })}
           onRoute={(routeId, dir) => navigate({ route: routeId, dir }, "push")}
           onFavoriteChange={changeFavorite}
+          onDirections={(to) => navigate({ trip: { to, from: null, at: null } }, "push")}
         />
       ) : (
         view.near && (
@@ -488,6 +592,7 @@ export function TransitMap() {
             label={view.near.label}
             stops={nearby}
             onStop={(id) => navigate({ stop: id }, "push")}
+            onDirections={() => navigate({ trip: { to: view.near!, from: null, at: null } }, "push")}
             onClose={() => close({ near: null })}
           />
         )

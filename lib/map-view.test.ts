@@ -28,8 +28,8 @@ test("mapHref and parseMapView keep the stop, the route and the direction", () =
   assert.equal(mapHref({ stop: null, route: null, dir: 0 }), "/");
   assert.equal(mapHref({ stop: "sp:18848", route: null, dir: 1 }), "/?stop=sp%3A18848");
   const href = mapHref({ stop: "sp:1", route: "sp:METRÔ L1", dir: 1 });
-  assert.deepEqual(parseMapView(new URL(href, "https://x").searchParams), { stop: "sp:1", route: "sp:METRÔ L1", dir: 1, near: null });
-  assert.deepEqual(parseMapView(new URLSearchParams("dir=7")), { stop: null, route: null, dir: 0, near: null });
+  assert.deepEqual(parseMapView(new URL(href, "https://x").searchParams), { stop: "sp:1", route: "sp:METRÔ L1", dir: 1, near: null, trip: null });
+  assert.deepEqual(parseMapView(new URLSearchParams("dir=7")), { stop: null, route: null, dir: 0, near: null, trip: null });
 });
 
 test("mapHref and parseMapView keep a chosen place", () => {
@@ -57,4 +57,12 @@ test("routeGeoJSON returns no bounds for a route without patterns", () => {
   const { bounds, data } = routeGeoJSON({ ...ROUTE, patterns: [] }, 0);
   assert.equal(bounds, null);
   assert.deepEqual(data.features, []);
+});
+
+test("mapHref and parseMapView keep a trip with its origin and time", () => {
+  const trip = { to: { lat: -23.58736, lon: -46.67222, label: "Destino" }, from: { lat: -23.54193, lon: -46.69797, label: "Rua Araioses" }, at: 1_760_000_000_000 };
+  const view = parseMapView(new URL(mapHref({ stop: "sp:1", route: null, dir: 0, trip }), "https://x").searchParams);
+  assert.deepEqual([view.stop, view.trip], ["sp:1", trip]);
+  const now = parseMapView(new URLSearchParams("to=-23.5,-46.6&toLabel=X")).trip;
+  assert.deepEqual(now, { to: { lat: -23.5, lon: -46.6, label: "X" }, from: null, at: null });
 });

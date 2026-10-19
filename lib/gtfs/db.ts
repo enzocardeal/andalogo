@@ -5,7 +5,7 @@ import type { FeedTables } from "./build.ts";
 const CHUNK_ROWS = 1000;
 const INT4 = 23;
 
-export type FeedVersion = { sha256: string; stopsFile: string };
+export type FeedVersion = { sha256: string; stopsFile: string; routingFile: string | null };
 
 export async function activeSha256(sql: Sql, feed: Feed): Promise<string | null> {
   const [row] = await sql<{ sha256: string }[]>`select sha256 from public.feed_versions where feed = ${feed}`;
@@ -36,9 +36,9 @@ export async function replaceFeed(sql: Sql, feed: Feed, tables: FeedTables, vers
     await insertAll(tx, "timetable_stops", tables.timetableStops);
     await insertAll(tx, "timetable_trips", tables.timetableTrips);
     await tx`
-      insert into public.feed_versions (feed, sha256, stops_file)
-      values (${feed}, ${version.sha256}, ${version.stopsFile})
+      insert into public.feed_versions (feed, sha256, stops_file, routing_file)
+      values (${feed}, ${version.sha256}, ${version.stopsFile}, ${version.routingFile})
       on conflict (feed) do update
-        set sha256 = excluded.sha256, stops_file = excluded.stops_file, loaded_at = now()`;
+        set sha256 = excluded.sha256, stops_file = excluded.stops_file, routing_file = excluded.routing_file, loaded_at = now()`;
   });
 }

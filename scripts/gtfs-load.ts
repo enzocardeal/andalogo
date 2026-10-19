@@ -8,6 +8,7 @@ import { prepareArtesp } from "../lib/gtfs/artesp.ts";
 import { readShapes } from "../lib/gtfs/shapes.ts";
 import { readTripStops } from "../lib/gtfs/trips.ts";
 import { readAll } from "../lib/gtfs/zip.ts";
+import { buildNetwork } from "../lib/router/network.ts";
 import { encodeStops, staleStopsFiles, STOPS_BUCKET } from "../lib/stops-file.ts";
 import { createAdminClient } from "../lib/supabase/admin.ts";
 import type { Feed } from "../lib/transit.ts";
@@ -70,28 +71,30 @@ try {
         throw error;
       }
     }
+    const upload = async (name: string, text: string) => {
+      const body = new Blob([text], { type: "application/json" });
+      const { error } = await storage
+        .from(STOPS_BUCKET)
+        .upload(name, body, { contentType: "application/json", cacheControl: ONE_YEAR_S, upsert: true });
+      if (error) {
+        throw error;
+      }
+      console.log(`${feed}: uploaded ${name} (${(body.size / 1e6).toFixed(2)} MB)`);
+    };
     const stopsFile = `${feed}-${sha256.slice(0, 12)}.json`;
-    const body = new Blob([encodeStops(tables.stops)], { type: "application/json" });
-    const { error } = await storage
-      .from(STOPS_BUCKET)
-      .upload(stopsFile, body, { contentType: "application/json", cacheControl: ONE_YEAR_S, upsert: true });
-    if (error) {
-      throw error;
-    }
-    console.log(`${feed}: uploaded ${stopsFile} (${(body.size / 1e6).toFixed(2)} MB)`);
+    const routingFile = `routing-${feed}-${sha256.slice(0, 12)}.json`;
+    await upload(stopsFile, encodeStops(tables.stops));
+    await upload(routingFile, JSON.stringify(buildNetwork(feed, tables)));
 
-    await replaceFeed(sql, feed, tables, { sha256, stopsFile });
+    await replaceFeed(sql, feed, tables, { sha256, stopsFile, routingFile });
     console.log(`${feed}: loaded version ${sha256.slice(0, 12)}`);
 
     const { data: files, error: listError } = await storage.from(STOPS_BUCKET).list();
     if (listError) {
       throw listError;
     }
-    const stale = staleStopsFiles(
-      files.map((file) => file.name),
-      feed,
-      stopsFile,
-    );
+    const names = files.map((file) => file.name);
+    const stale = [...staleStopsFiles(names, feed, stopsFile), ...staleStopsFiles(names, `routing-${feed}`, routingFile)];
     if (stale.length > 0) {
       const { error: removeError } = await storage.from(STOPS_BUCKET).remove(stale);
       if (removeError) {

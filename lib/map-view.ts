@@ -3,7 +3,9 @@ import type { RouteDetails } from "./transit.ts";
 
 export type NearPlace = { lat: number; lon: number; label: string };
 
-export type MapView = { stop: string | null; route: string | null; dir: number; near?: NearPlace | null };
+export type TripView = { to: NearPlace; from: NearPlace | null; at: number | null };
+
+export type MapView = { stop: string | null; route: string | null; dir: number; near?: NearPlace | null; trip?: TripView | null };
 
 export const DEFAULT_ROUTE_COLOR = "#334155";
 
@@ -22,6 +24,17 @@ export function mapHref(view: MapView): string {
     params.set("near", `${view.near.lat.toFixed(5)},${view.near.lon.toFixed(5)}`);
     params.set("label", view.near.label);
   }
+  if (view.trip) {
+    params.set("to", `${view.trip.to.lat.toFixed(5)},${view.trip.to.lon.toFixed(5)}`);
+    params.set("toLabel", view.trip.to.label);
+    if (view.trip.from) {
+      params.set("from", `${view.trip.from.lat.toFixed(5)},${view.trip.from.lon.toFixed(5)}`);
+      params.set("fromLabel", view.trip.from.label);
+    }
+    if (view.trip.at !== null) {
+      params.set("at", String(view.trip.at));
+    }
+  }
   const query = params.toString();
   return query ? `/?${query}` : "/";
 }
@@ -31,12 +44,22 @@ function parseNear(near: string | null, label: string | null): NearPlace | null 
   return near && Number.isFinite(lat) && Number.isFinite(lon) ? { lat, lon, label: label ?? "" } : null;
 }
 
+function parseTrip(params: { get(name: string): string | null }): TripView | null {
+  const to = parseNear(params.get("to"), params.get("toLabel"));
+  if (!to) {
+    return null;
+  }
+  const at = Number(params.get("at"));
+  return { to, from: parseNear(params.get("from"), params.get("fromLabel")), at: params.get("at") && Number.isFinite(at) ? at : null };
+}
+
 export function parseMapView(params: { get(name: string): string | null }): MapView {
   return {
     stop: params.get("stop"),
     route: params.get("route"),
     dir: params.get("dir") === "1" ? 1 : 0,
     near: parseNear(params.get("near"), params.get("label")),
+    trip: parseTrip(params),
   };
 }
 

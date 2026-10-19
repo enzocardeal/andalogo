@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { StarIcon } from "@/components/bottom-nav";
+import { DirectionsButton } from "@/components/directions-button";
 import { LineBadge } from "@/components/line-badge";
 import { LineSummary } from "@/components/line-summary";
 import { liveLineFor, sortByArrival, type Arrivals } from "@/lib/arrivals";
-import { SHEET_SHARE } from "@/lib/map-view";
+import { SHEET_SHARE, type NearPlace } from "@/lib/map-view";
 import { strings } from "@/lib/strings";
 import { createClient } from "@/lib/supabase/client";
 import type { StopDetails } from "@/lib/transit";
@@ -19,9 +20,10 @@ type StopSheetProps = {
   onClose: () => void;
   onRoute: (routeId: string, dir: number) => void;
   onFavoriteChange: (stopId: string, favorite: boolean) => void;
+  onDirections: (place: NearPlace) => void;
 };
 
-export function StopSheet({ stopId, arrivals, onLoaded, onClose, onRoute, onFavoriteChange }: StopSheetProps) {
+export function StopSheet({ stopId, arrivals, onLoaded, onClose, onRoute, onFavoriteChange, onDirections }: StopSheetProps) {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [favoriteFailed, setFavoriteFailed] = useState(false);
 
@@ -79,6 +81,7 @@ export function StopSheet({ stopId, arrivals, onLoaded, onClose, onRoute, onFavo
               {live ? strings.arrivals.live : stop.mode === "emtu" ? strings.stop.timetable : strings.stop.scheduled}
             </p>
           )}
+          {stop && <DirectionsButton onClick={() => onDirections({ lat: stop.lat, lon: stop.lon, label: stop.name })} />}
         </div>
         <div className="flex shrink-0">
           {stop && (

@@ -9,6 +9,7 @@ import type { MapStop } from "./stops-file.ts";
 
 export const STOPS_SOURCE = "stops";
 export const ROUTE_SOURCE = "route";
+export const TRIP_SOURCE = "trip";
 export const BUS_STOPS_LAYER = "bus-stops";
 export const SELECTED_LAYER = "selected-stop";
 export const SELECTED_SIGN_LAYER = "selected-sign";
@@ -146,12 +147,40 @@ export function overlayLayers(scheme: Scheme): LayerSpecification[] {
       paint: { "line-color": ["get", "color"], "line-width": 5, "line-opacity": 0.85 },
     },
     {
+      id: "trip-walk",
+      type: "line",
+      source: TRIP_SOURCE,
+      filter: ["==", ["get", "kind"], "walk"],
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: { "line-color": colors.pole, "line-width": 4, "line-dasharray": [0.1, 2] },
+    },
+    {
+      id: "trip-ride",
+      type: "line",
+      source: TRIP_SOURCE,
+      filter: ["==", ["get", "kind"], "ride"],
+      layout: { "line-join": "round", "line-cap": "round" },
+      paint: { "line-color": ["get", "color"], "line-width": 6 },
+    },
+    {
       id: "rail-stations",
       type: "circle",
       source: STOPS_SOURCE,
       minzoom: 10,
       filter: IS_RAIL,
       paint: { ...railPaint, "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, 3, 15, 8] },
+    },
+    {
+      id: "trip-points",
+      type: "circle",
+      source: TRIP_SOURCE,
+      filter: ["==", ["geometry-type"], "Point"],
+      paint: {
+        "circle-radius": 6,
+        "circle-color": colors.routeStopFill,
+        "circle-stroke-width": 3,
+        "circle-stroke-color": ["get", "color"],
+      },
     },
     {
       id: "route-stops",

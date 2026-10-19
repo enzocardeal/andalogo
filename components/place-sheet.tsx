@@ -1,5 +1,6 @@
 "use client";
 
+import { DirectionsButton } from "@/components/directions-button";
 import { CloseButton, Sheet } from "@/components/stop-sheet";
 import { SIGN_COLORS } from "@/lib/map-layers";
 import { DEFAULT_ROUTE_COLOR } from "@/lib/map-view";
@@ -10,6 +11,7 @@ type PlaceSheetProps = {
   label: string;
   stops: NearbyStop[] | null;
   onStop: (stopId: string) => void;
+  onDirections: () => void;
   onClose: () => void;
 };
 
@@ -23,13 +25,14 @@ function modeColor(stop: NearbyStop): string {
   return stop.color ?? DEFAULT_ROUTE_COLOR;
 }
 
-export function PlaceSheet({ label, stops, onStop, onClose }: PlaceSheetProps) {
+export function PlaceSheet({ label, stops, onStop, onDirections, onClose }: PlaceSheetProps) {
   return (
     <Sheet>
       <header className="flex items-start justify-between gap-2 px-4 pt-4 pb-2">
         <div className="flex min-w-0 flex-col">
           <span className="text-sm text-neutral-500 dark:text-neutral-400">{strings.place.near}</span>
           <h2 className="truncate text-lg font-semibold">{label}</h2>
+          <DirectionsButton onClick={onDirections} />
         </div>
         <CloseButton label={strings.place.close} onClick={onClose} />
       </header>

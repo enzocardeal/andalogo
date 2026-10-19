@@ -260,10 +260,12 @@ test("replaceFeed loads a feed and replaces it on the next load", async (t) => {
     });
 
   try {
-    await replaceFeed(sql, "artesp", tables("B"), { sha256: "first", stopsFile: "artesp-first.json" });
-    await replaceFeed(sql, "artesp", tables("Bairro B"), { sha256: "second", stopsFile: "artesp-second.json" });
+    await replaceFeed(sql, "artesp", tables("B"), { sha256: "first", stopsFile: "artesp-first.json", routingFile: null });
+    await replaceFeed(sql, "artesp", tables("Bairro B"), { sha256: "second", stopsFile: "artesp-second.json", routingFile: "routing-artesp-second.json" });
 
     assert.equal(await activeSha256(sql, "artesp"), "second");
+    const [version] = await sql<{ routing_file: string | null }[]>`select routing_file from public.feed_versions where feed = 'artesp'`;
+    assert.equal(version.routing_file, "routing-artesp-second.json");
     const stop = ok(await member.client.rpc("get_stop", { p_stop_id: "ar:9", p_at: "2026-10-19T12:00:00-03:00" }), "get_stop");
     assert.deepEqual(stop, {
       id: "ar:9",
