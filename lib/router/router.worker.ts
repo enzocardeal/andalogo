@@ -1,9 +1,10 @@
+import { boardingOptions } from "./boarding.ts";
 import { buildFootpaths, type Footpaths } from "./footpaths.ts";
 import type { RouterRequest, RouterResponse } from "./messages.ts";
 import { loadNetwork, type Network, type NetworkFile } from "./network.ts";
 import { plan, serviceClock } from "./plan.ts";
 import { decodeStops } from "../stops-file.ts";
-import { toTrip } from "./trips.ts";
+import { placeOf, toJourney, toTrip } from "./trips.ts";
 
 let ready: Promise<{ network: Network; footpaths: Footpaths }> | null = null;
 
@@ -46,11 +47,24 @@ self.onmessage = async ({ data }: MessageEvent<RouterRequest>) => {
       throw new Error("the router is not loaded");
     }
     const { network, footpaths } = await ready;
+    const endpoints = { from: data.from, to: data.to };
+    if (data.type === "boarding") {
+      const { day, previousDay, seconds } = serviceClock(new Date(data.trip.depart));
+      const journey = toJourney(network, data.trip, data.trip.depart, seconds);
+      const query = { from: data.from, departure: seconds, day, previousDay, factor: data.factor };
+      const options = boardingOptions(network, footpaths, journey, data.leg, query).map((option) => ({
+        stop: placeOf(network, option.stop),
+        current: option.current,
+        trip: toTrip(network, option.journey, endpoints, data.trip.depart, seconds),
+      }));
+      reply({ type: "boarded", id: data.id, options });
+      return;
+    }
     const started = performance.now();
     const departure = new Date(data.departure);
     const journeys = plan(network, footpaths, { from: data.from, to: data.to, departure, factor: data.factor });
     const seconds = serviceClock(departure).seconds;
-    const trips = journeys.map((journey) => toTrip(network, journey, { from: data.from, to: data.to }, data.departure, seconds));
+    const trips = journeys.map((journey) => toTrip(network, journey, endpoints, data.departure, seconds));
     reply({ type: "planned", id: data.id, trips, elapsedMs: performance.now() - started });
   } catch (error) {
     reply({ type: "failed", id: data.id, message: messageOf(error) });

@@ -88,7 +88,46 @@ export function ridePace(network: Network, pattern: FrequencyPattern, factor: nu
   return network.routes[pattern.route].mode === "bus" ? pace * factor : pace;
 }
 
+export type ServiceTime = { day: number; previousDay: number; factor: number };
+
+export function rideTimes(
+  network: Network,
+  index: number,
+  boardPosition: number,
+  alightPosition: number,
+  ready: number,
+  time: ServiceTime,
+): { depart: number; arrive: number } | null {
+  const pattern = network.patterns[index];
+  if (pattern.kind === "frequency") {
+    const headway = headwayAt(pattern, time.day, time.previousDay, ready);
+    if (headway === null) {
+      return null;
+    }
+    const depart = ready + headway / 2;
+    const meters = pattern.offsetsM[alightPosition] - pattern.offsetsM[boardPosition];
+    return { depart, arrive: depart + meters * ridePace(network, pattern, time.factor) };
+  }
+  const start = earliestTrip(pattern, time.day, time.previousDay, ready - pattern.offsetsS[boardPosition]);
+  return start === null ? null : { depart: start + pattern.offsetsS[boardPosition], arrive: start + pattern.offsetsS[alightPosition] };
+}
+
+export type Reach = { arrive: (stop: number) => number; legsTo: (stop: number) => Leg[] };
+
 export function raptor(network: Network, footpaths: Footpaths, query: RaptorQuery): Journey[] {
+  return search(network, footpaths, query).journeys;
+}
+
+export function reachFrom(network: Network, footpaths: Footpaths, query: Omit<RaptorQuery, "destinations">): Reach {
+  const { reach, legsTo } = search(network, footpaths, { ...query, destinations: [] });
+  return { arrive: (stop) => reach[stop], legsTo };
+}
+
+function search(
+  network: Network,
+  footpaths: Footpaths,
+  query: RaptorQuery,
+): { journeys: Journey[]; reach: Float64Array; legsTo: (stop: number) => Leg[] } {
   const count = network.stopIds.length;
   const rounds = query.maxRides + 1;
   const arrival = Array.from({ length: rounds }, () => new Float64Array(count).fill(Infinity));
@@ -246,10 +285,15 @@ export function raptor(network: Network, footpaths: Footpaths, query: RaptorQuer
     }
     marked = next;
   }
-  return journeys;
+  return { journeys, reach, legsTo: (stop) => legsTo(stop, reachRound[stop]) };
 
   function rebuild(target: number, round: number, arrive: number): Journey {
-    const legs: Leg[] = [{ kind: "walk", from: target, to: null, depart: arrival[round][target], arrive }];
+    const legs: Leg[] = [...legsTo(target, round), { kind: "walk", from: target, to: null, depart: arrival[round][target], arrive }];
+    return { legs, depart: query.departure, arrive, rides: legs.filter((leg) => leg.kind === "ride").length };
+  }
+
+  function legsTo(target: number, round: number): Leg[] {
+    const legs: Leg[] = [];
     let stop = target;
     let current = round;
     for (;;) {
@@ -283,6 +327,6 @@ export function raptor(network: Network, footpaths: Footpaths, query: RaptorQuer
       stop = from;
       current = previous;
     }
-    return { legs, depart: query.departure, arrive, rides: legs.filter((leg) => leg.kind === "ride").length };
+    return legs;
   }
 }

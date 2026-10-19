@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { MapStop } from "../stops-file.ts";
+import { boardingOptions, replay } from "./boarding.ts";
 import { buildFootpaths, stopsNear, walkSeconds } from "./footpaths.ts";
 import { buildNetwork, loadNetwork, type NetworkFile } from "./network.ts";
 import { journeyKey, plan, routesBetween, serviceClock } from "./plan.ts";
 import { earliestTrip, headwayAt, raptor, ridePace, type Journey } from "./raptor.ts";
-import { toTrip } from "./trips.ts";
+import { toJourney, toTrip } from "./trips.ts";
 
 const EIGHT = 8 * 3600;
 
@@ -254,4 +255,60 @@ test("toTrip converts times, merges walks in a row and lists the stops of each r
   assert.ok(first.kind === "ride");
   assert.deepEqual([first.line.short_name, first.headsign, first.path.length, (first.ready - startMs) / 1000], ["1", "C", 3, 60]);
   assert.deepEqual([trip.rides, trip.walkSeconds, (trip.arrive - startMs) / 1000], [2, 158, 2700]);
+  const back = toJourney(network, toTrip(network, transfer, { from: origin, to: destination }, startMs, EIGHT), startMs, EIGHT);
+  assert.deepEqual(back, transfer);
+});
+
+test("boardingOptions offers every earlier stop of the line, reached by any other line", () => {
+  const file: NetworkFile = {
+    version: 1,
+    feed: "sptrans",
+    routes: [
+      ["sp:F1", "F1", null, null, 0],
+      ["sp:F2", "F2", null, null, 0],
+      ["sp:L", "L", null, null, 0],
+    ],
+    stops: ["sp:O", "sp:P", "sp:Q", "sp:R", "sp:T"],
+    frequency: [
+      [0, 0, "P", [0, 1], [0, 2200], 600, [0, 0, 1440, 600]],
+      [1, 0, "Q", [0, 2], [0, 4400], 900, [0, 0, 1440, 600]],
+      [2, 0, "T", [1, 2, 3, 4], [0, 2200, 4400, 8800], 1800, [0, 0, 1440, 1200]],
+    ],
+    timetable: [],
+  };
+  const line = loadNetwork(
+    [file],
+    [stop("sp:O", -23.6), stop("sp:P", -23.58), stop("sp:Q", -23.56), stop("sp:R", -23.54), stop("sp:T", -23.5)],
+  );
+  const paths = buildFootpaths(line);
+  const query = { from: { lat: -23.6, lon: -46.6 }, departure: EIGHT, day: 0, previousDay: 2, factor: 1 };
+  const [journey] = raptor(line, paths, {
+    ...query,
+    origins: stopsNear(line, query.from),
+    destinations: stopsNear(line, { lat: -23.5, lon: -46.6 }),
+    maxRides: 3,
+  });
+  const rides = (each: Journey) =>
+    each.legs.flatMap((leg) => (leg.kind === "ride" ? [line.routes[line.patterns[leg.pattern].route].shortName] : []));
+  const options = boardingOptions(line, paths, journey, 2, query);
+  assert.deepEqual(
+    options.map((option) => [line.stopIds[option.stop], option.current, rides(option.journey), Math.round(option.journey.arrive - EIGHT)]),
+    [
+      ["sp:P", false, ["F1", "L"], 3360],
+      ["sp:Q", true, ["F2", "L"], 3210],
+    ],
+  );
+  assert.deepEqual(boardingOptions(line, paths, journey, 0, query), []);
+  const ride = journey.legs[2];
+  assert.ok(ride.kind === "ride");
+  assert.deepEqual(
+    replay(line, [ride, { kind: "walk", from: ride.to, to: null, depart: 0, arrive: 30 }], EIGHT + 1000, query)?.map((leg) => [
+      leg.depart - EIGHT,
+      Math.round(leg.arrive - EIGHT),
+    ]),
+    [
+      [1660, 3010],
+      [3010, 3040],
+    ],
+  );
 });

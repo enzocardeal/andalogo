@@ -1,10 +1,10 @@
 import { bucketOf } from "./eta-calibration.ts";
 import { loadRouterUrls } from "./map-stops.ts";
 import type { RouterRequest, RouterResponse } from "./router/messages.ts";
-import type { Trip, TripPlace } from "./router/trips.ts";
+import type { BoardingChoice, Trip, TripPlace } from "./router/trips.ts";
 import { createClient } from "./supabase/client.ts";
 
-type Pending = { resolve: (trips: Trip[]) => void; reject: (error: Error) => void };
+type Pending = { resolve: (response: RouterResponse) => void; reject: (error: Error) => void };
 
 let worker: Worker | null = null;
 let loaded: Promise<void> | null = null;
@@ -18,8 +18,8 @@ function routerWorker(): Worker {
     worker.onmessage = ({ data }: MessageEvent<RouterResponse>) => {
       if (data.type === "loaded") {
         onLoaded?.resolve();
-      } else if (data.type === "planned") {
-        pending.get(data.id)?.resolve(data.trips);
+      } else if (data.type !== "failed") {
+        pending.get(data.id)?.resolve(data);
         pending.delete(data.id);
       } else if (data.id === null) {
         onLoaded?.reject(new Error(data.message));
@@ -63,12 +63,22 @@ async function factorAt(departure: Date): Promise<number> {
   return typeof data === "number" && data > 0 ? data : 1;
 }
 
+function ask(request: (id: number) => RouterRequest): Promise<RouterResponse> {
+  const id = nextId++;
+  return new Promise((resolve, reject) => {
+    pending.set(id, { resolve, reject });
+    routerWorker().postMessage(request(id));
+  });
+}
+
 export async function planTrip(from: TripPlace, to: TripPlace, departure: Date): Promise<Trip[]> {
   const [factor] = await Promise.all([factorAt(departure), prepareRouter()]);
-  const id = nextId++;
-  return new Promise<Trip[]>((resolve, reject) => {
-    pending.set(id, { resolve, reject });
-    const request: RouterRequest = { type: "plan", id, from, to, departure: departure.getTime(), factor };
-    routerWorker().postMessage(request);
-  });
+  const response = await ask((id) => ({ type: "plan", id, from, to, departure: departure.getTime(), factor }));
+  return response.type === "planned" ? response.trips : [];
+}
+
+export async function boardingChoices(from: TripPlace, to: TripPlace, trip: Trip, leg: number): Promise<BoardingChoice[]> {
+  const [factor] = await Promise.all([factorAt(new Date(trip.depart)), prepareRouter()]);
+  const response = await ask((id) => ({ type: "boarding", id, from, to, trip, leg, factor }));
+  return response.type === "boarded" ? response.options : [];
 }

@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import { LineBadge } from "@/components/line-badge";
 import { CloseButton, Sheet } from "@/components/stop-sheet";
 import type { TripView } from "@/lib/map-view";
-import type { Trip, TripLeg, TripPlace } from "@/lib/router/trips";
+import type { BoardingChoice, Trip, TripLeg, TripPlace } from "@/lib/router/trips";
 import { strings } from "@/lib/strings";
-import { planTrip } from "@/lib/trip-router";
+import { boardingChoices, planTrip } from "@/lib/trip-router";
 
 const CLOCK = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
 const LOCATION_TIMEOUT_MS = 10_000;
@@ -21,7 +21,9 @@ type TripSheetProps = {
   onClose: () => void;
 };
 
-type Result = { key: string; status: "planning" | "done" | "failed" | "location"; trips: Trip[] };
+type Result = { key: string; status: "planning" | "done" | "failed" | "location"; trips: Trip[]; origin?: TripPlace };
+
+type Picking = { trip: Trip; leg: number; status: "loading" | "done" | "failed"; options: BoardingChoice[] };
 
 function clock(ms: number): string {
   return CLOCK.format(new Date(ms));
@@ -55,8 +57,25 @@ export function TripSheet({ trip, pickingOrigin, onPickOrigin, onUseMyLocation, 
   const key = JSON.stringify([trip.from, trip.to, trip.at]);
   const [result, setResult] = useState<Result | null>(null);
   const [selected, setSelected] = useState<{ key: string; index: number } | null>(null);
+  const [edited, setEdited] = useState<{ key: string; index: number; trip: Trip } | null>(null);
+  const [picking, setPicking] = useState<Picking | null>(null);
   const current = result?.key === key ? result : null;
-  const chosen = selected?.key === key && current ? (current.trips[selected.index] ?? null) : null;
+  const planned = selected?.key === key && current ? (current.trips[selected.index] ?? null) : null;
+  const chosen = planned && edited?.key === key && edited.index === selected?.index ? edited.trip : planned;
+  const shownPicking = chosen && picking?.trip === chosen ? picking : null;
+  const destination: TripPlace = { id: null, name: trip.to.label, lat: trip.to.lat, lon: trip.to.lon };
+
+  function pickBoarding(origin: TripPlace, shown: Trip, leg: number) {
+    const same = (now: Picking) => now.trip === shown && now.leg === leg;
+    setPicking({ trip: shown, leg, status: "loading", options: [] });
+    boardingChoices(origin, destination, shown, leg).then(
+      (options) => setPicking((now) => (now && same(now) ? { ...now, status: "done", options } : now)),
+      (error) => {
+        console.error("boarding options failed:", error);
+        setPicking((now) => (now && same(now) ? { ...now, status: "failed" } : now));
+      },
+    );
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -72,10 +91,10 @@ export function TripSheet({ trip, pickingOrigin, onPickOrigin, onUseMyLocation, 
         return;
       }
       try {
-        const destination = { id: null, name: trip.to.label, lat: trip.to.lat, lon: trip.to.lon };
-        const trips = await planTrip(origin, destination, new Date(trip.at ?? Date.now()));
+        const to = { id: null, name: trip.to.label, lat: trip.to.lat, lon: trip.to.lon };
+        const trips = await planTrip(origin, to, new Date(trip.at ?? Date.now()));
         if (!cancelled) {
-          setResult({ key, status: "done", trips });
+          setResult({ key, status: "done", trips, origin });
         }
       } catch (error) {
         console.error("trip planning failed:", error);
@@ -103,9 +122,28 @@ export function TripSheet({ trip, pickingOrigin, onPickOrigin, onUseMyLocation, 
         </div>
         <CloseButton label={strings.trip.close} onClick={onClose} />
       </header>
-      <div key={chosen ? "detail" : "list"} className="flex min-h-0 flex-col gap-3 overflow-y-auto overscroll-contain px-4 pb-4">
-        {chosen ? (
-          <TripDetail trip={chosen} onBack={() => setSelected(null)} />
+      <div
+        key={chosen ? (shownPicking ? "boarding" : "detail") : "list"}
+        className="flex min-h-0 flex-col gap-3 overflow-y-auto overscroll-contain px-4 pb-4"
+      >
+        {shownPicking && selected ? (
+          <BoardingList
+            picking={shownPicking}
+            onChoose={(choice) => {
+              setEdited({ key, index: selected.index, trip: choice });
+              setPicking(null);
+            }}
+            onCancel={() => setPicking(null)}
+          />
+        ) : chosen ? (
+          <TripDetail
+            trip={chosen}
+            onBack={() => {
+              setSelected(null);
+              setEdited(null);
+            }}
+            onBoarding={current?.origin ? (leg) => pickBoarding(current.origin!, chosen, leg) : undefined}
+          />
         ) : (
           <>
             <div className="flex items-center justify-between gap-2 text-sm">
@@ -173,7 +211,7 @@ function TripList({ result, onSelect }: { result: Result | null; onSelect: (inde
     <ul className="flex flex-col divide-y divide-neutral-200 dark:divide-neutral-800">
       {result.trips.map((trip, index) => (
         <li key={index}>
-          <button type="button" onClick={() => onSelect(index)} className="flex w-full flex-col gap-2 py-3 text-left">
+          <button type="button" onClick={() => onSelect(index)} className="flex w-full flex-col items-stretch gap-2 py-3 text-left">
             <span className="flex items-baseline justify-between gap-2">
               <span className="font-semibold tabular-nums">
                 {clock(trip.depart)} → {clock(trip.arrive)}
@@ -201,7 +239,7 @@ function TripList({ result, onSelect }: { result: Result | null; onSelect: (inde
   );
 }
 
-function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
+function TripDetail({ trip, onBack, onBoarding }: { trip: Trip; onBack: () => void; onBoarding?: (leg: number) => void }) {
   return (
     <>
       <button type="button" onClick={onBack} className="min-h-9 self-start font-medium text-blue-700 dark:text-blue-400">
@@ -213,7 +251,7 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
       <ol className="flex flex-col gap-3">
         {trip.legs.map((leg, index) => (
           <li key={index}>
-            <LegDetail leg={leg} last={index === trip.legs.length - 1} />
+            <LegDetail leg={leg} last={index === trip.legs.length - 1} onBoarding={onBoarding && (() => onBoarding(index))} />
           </li>
         ))}
       </ol>
@@ -221,7 +259,7 @@ function TripDetail({ trip, onBack }: { trip: Trip; onBack: () => void }) {
   );
 }
 
-function LegDetail({ leg, last }: { leg: TripLeg; last: boolean }) {
+function LegDetail({ leg, last, onBoarding }: { leg: TripLeg; last: boolean; onBoarding?: () => void }) {
   if (leg.kind === "walk") {
     return (
       <p className="text-sm text-neutral-600 dark:text-neutral-400">
@@ -254,6 +292,87 @@ function LegDetail({ leg, last }: { leg: TripLeg; last: boolean }) {
       <span className="text-sm">
         {strings.trip.alight} {leg.to.name} · <span className="tabular-nums">{clock(leg.arrive)}</span>
       </span>
+      {onBoarding && (
+        <button type="button" onClick={onBoarding} className="min-h-9 self-start text-sm font-medium text-blue-700 dark:text-blue-400">
+          {strings.trip.otherStops}
+        </button>
+      )}
     </div>
+  );
+}
+
+function BoardingList({ picking, onChoose, onCancel }: { picking: Picking; onChoose: (trip: Trip) => void; onCancel: () => void }) {
+  const leg = picking.trip.legs[picking.leg];
+  if (leg?.kind !== "ride") {
+    return null;
+  }
+  return (
+    <>
+      <button type="button" onClick={onCancel} className="min-h-9 self-start font-medium text-blue-700 dark:text-blue-400">
+        ‹ {strings.trip.journey}
+      </button>
+      <p className="flex items-center gap-2 font-semibold">
+        {strings.trip.boardWhere} <LineBadge line={leg.line} />
+      </p>
+      {picking.status === "loading" ? (
+        <p className="text-sm text-neutral-500 dark:text-neutral-400">{strings.trip.loadingStops}</p>
+      ) : picking.status === "failed" ? (
+        <p role="alert" className="text-sm text-red-700 dark:text-red-400">
+          {strings.trip.stopsFailed}
+        </p>
+      ) : picking.options.length <= 1 ? (
+        <p className="text-sm text-neutral-600 dark:text-neutral-400">{strings.trip.noOtherStops}</p>
+      ) : (
+        <ul className="flex flex-col divide-y divide-neutral-200 dark:divide-neutral-800">
+          {picking.options.map((option, index) => (
+            <li key={index}>
+              <BoardingRow option={option} line={leg.line.id} arrive={picking.trip.arrive} onChoose={onChoose} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+function BoardingRow({
+  option,
+  line,
+  arrive,
+  onChoose,
+}: {
+  option: BoardingChoice;
+  line: string;
+  arrive: number;
+  onChoose: (trip: Trip) => void;
+}) {
+  const ride = option.trip.legs.findIndex((leg) => leg.kind === "ride" && leg.line.id === line && leg.from.id === option.stop.id);
+  const before = option.trip.legs.slice(0, ride);
+  const rides = before.flatMap((leg) => (leg.kind === "ride" ? [leg] : []));
+  const walk = before.reduce((sum, leg) => sum + leg.arrive - leg.depart, 0);
+  const delta = Math.round((option.trip.arrive - arrive) / 60_000);
+  return (
+    <button type="button" onClick={() => onChoose(option.trip)} className="flex w-full flex-col items-stretch gap-1 py-3 text-left">
+      <span className="flex items-baseline justify-between gap-2">
+        <span className={`min-w-0 truncate ${option.current ? "font-semibold" : ""}`}>{option.stop.name}</span>
+        <span className="shrink-0 text-sm tabular-nums">
+          {strings.trip.arrive} {clock(option.trip.arrive)}
+        </span>
+      </span>
+      <span className="flex items-center justify-between gap-2 text-sm text-neutral-600 dark:text-neutral-400">
+        <span className="flex flex-wrap items-center gap-1">
+          {rides.length > 0
+            ? rides.map((leg, index) => <LineBadge key={index} line={leg.line} />)
+            : `🚶 ${minutes(walk)} ${strings.trip.minutes}`}
+        </span>
+        <span className="shrink-0 tabular-nums">
+          {option.current
+            ? strings.trip.current
+            : delta === 0
+              ? strings.trip.sameTime
+              : `${delta > 0 ? "+" : "−"}${Math.abs(delta)} ${strings.trip.minutes}`}
+        </span>
+      </span>
+    </button>
   );
 }

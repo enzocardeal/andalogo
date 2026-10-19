@@ -42,6 +42,20 @@ export function journeyKey(journey: Journey): string {
   return journey.legs.flatMap((leg) => (leg.kind === "ride" ? [`${leg.from}>${leg.to}`] : [])).join("|");
 }
 
+export function withAlternatives(network: Network, journey: Journey): Journey {
+  return {
+    ...journey,
+    legs: journey.legs.map((leg) =>
+      leg.kind === "ride"
+        ? {
+            ...leg,
+            alternatives: routesBetween(network, leg.from, leg.to).filter((route) => route !== network.patterns[leg.pattern].route),
+          }
+        : leg,
+    ),
+  };
+}
+
 export function plan(network: Network, footpaths: Footpaths, query: PlanQuery): Journey[] {
   const clock = serviceClock(query.departure);
   const search = (excluded?: ReadonlySet<number>) =>
@@ -78,17 +92,7 @@ export function plan(network: Network, footpaths: Footpaths, query: PlanQuery): 
       excluded.add(route);
     }
   }
-  const journeys = [...byStops.values()].map((journey) => ({
-    ...journey,
-    legs: journey.legs.map((leg) =>
-      leg.kind === "ride"
-        ? {
-            ...leg,
-            alternatives: routesBetween(network, leg.from, leg.to).filter((route) => route !== network.patterns[leg.pattern].route),
-          }
-        : leg,
-    ),
-  }));
+  const journeys = [...byStops.values()].map((journey) => withAlternatives(network, journey));
   const meters = distanceMeters(query.from, query.to);
   if (meters <= MAX_WALK_ONLY_M) {
     const arrive = clock.seconds + walkSeconds(meters);

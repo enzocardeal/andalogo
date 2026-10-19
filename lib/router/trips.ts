@@ -31,12 +31,14 @@ export type Trip = { legs: TripLeg[]; depart: number; arrive: number; rides: num
 
 export type Endpoints = { from: TripPlace; to: TripPlace };
 
+export type BoardingChoice = { stop: TripPlace; trip: Trip; current: boolean };
+
 function lineOf(network: Network, route: number): TripLine {
   const info = network.routes[route];
   return { id: info.id, short_name: info.shortName, color: info.color, text_color: info.textColor, mode: info.mode };
 }
 
-function placeOf(network: Network, stop: number): TripPlace {
+export function placeOf(network: Network, stop: number): TripPlace {
   return { id: network.stopIds[stop], name: network.names[stop], lat: network.lat[stop], lon: network.lon[stop] };
 }
 
@@ -76,4 +78,27 @@ export function toTrip(network: Network, journey: Journey, endpoints: Endpoints,
   }
   const walkSeconds = legs.reduce((sum, leg) => sum + (leg.kind === "walk" ? (leg.arrive - leg.depart) / 1000 : 0), 0);
   return { legs, depart: departureMs, arrive: at(journey.arrive), rides: journey.rides, walkSeconds: Math.round(walkSeconds) };
+}
+
+export function toJourney(network: Network, trip: Trip, departureMs: number, departureSeconds: number): Journey {
+  const seconds = (ms: number) => departureSeconds + (ms - departureMs) / 1000;
+  const stopOf = (place: TripPlace) => (place.id === null ? null : (network.stopIndex.get(place.id) ?? null));
+  const legs = trip.legs.map((leg): Leg => {
+    if (leg.kind === "walk") {
+      return { kind: "walk", from: stopOf(leg.from), to: stopOf(leg.to), depart: seconds(leg.depart), arrive: seconds(leg.arrive) };
+    }
+    const { stops } = network.patterns[leg.pattern];
+    return {
+      kind: "ride",
+      pattern: leg.pattern,
+      boardPosition: leg.boardPosition,
+      alightPosition: leg.alightPosition,
+      from: stops[leg.boardPosition],
+      to: stops[leg.alightPosition],
+      ready: seconds(leg.ready),
+      depart: seconds(leg.depart),
+      arrive: seconds(leg.arrive),
+    };
+  });
+  return { legs, depart: departureSeconds, arrive: seconds(trip.arrive), rides: trip.rides };
 }
