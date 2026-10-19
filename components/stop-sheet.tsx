@@ -20,7 +20,7 @@ type StopSheetProps = {
   onClose: () => void;
   onRoute: (routeId: string, dir: number) => void;
   onFavoriteChange: (stopId: string, favorite: boolean) => void;
-  onDirections: (place: NearPlace) => void;
+  onDirections?: (place: NearPlace) => void;
 };
 
 export function StopSheet({ stopId, arrivals, onLoaded, onClose, onRoute, onFavoriteChange, onDirections }: StopSheetProps) {
@@ -81,7 +81,7 @@ export function StopSheet({ stopId, arrivals, onLoaded, onClose, onRoute, onFavo
               {live ? strings.arrivals.live : stop.mode === "emtu" ? strings.stop.timetable : strings.stop.scheduled}
             </p>
           )}
-          {stop && <DirectionsButton onClick={() => onDirections({ lat: stop.lat, lon: stop.lon, label: stop.name })} />}
+          {stop && onDirections && <DirectionsButton onClick={() => onDirections({ lat: stop.lat, lon: stop.lon, label: stop.name })} />}
         </div>
         <div className="flex shrink-0">
           {stop && (

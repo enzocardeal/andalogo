@@ -3,6 +3,8 @@ export const MAP_STYLE_URL =
 
 export const MAP_WORKER_PATH = "/maplibre-gl-worker.js";
 
+export const ROUTE_FINDER = process.env.NEXT_PUBLIC_ROUTE_FINDER === "on";
+
 export const SAO_PAULO_CENTER: [number, number] = [-46.6339, -23.5505];
 
 export const INITIAL_ZOOM = 12;

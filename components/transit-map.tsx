@@ -13,7 +13,7 @@ import { nextBuses } from "@/lib/arrivals";
 import { lineMotion, type MovingBus } from "@/lib/bus-motion";
 import { requestCompass, smoothHeading, watchHeading } from "@/lib/compass";
 import { busLabel, createBusLayer, type BusLayer, type ShownBus } from "@/lib/live-markers";
-import { INITIAL_ZOOM, MAP_STYLE_URL, MAP_WORKER_PATH, SAO_PAULO_CENTER } from "@/lib/map";
+import { INITIAL_ZOOM, MAP_STYLE_URL, MAP_WORKER_PATH, ROUTE_FINDER, SAO_PAULO_CENTER } from "@/lib/map";
 import { createMapController, type MapController } from "@/lib/map-controller";
 import { CLICKABLE_LAYERS, EMPTY_COLLECTION } from "@/lib/map-layers";
 import { loadFavoriteIds, loadMapStops } from "@/lib/map-stops";
@@ -145,7 +145,7 @@ function isSheetEntry(): boolean {
 
 export function TransitMap() {
   const scheme = useColorScheme();
-  const view = parseMapView(useSearchParams());
+  const view = parseMapView(useSearchParams(), ROUTE_FINDER);
   const viewRef = useRef(view);
   const schemeRef = useRef(scheme);
   useEffect(() => {
@@ -660,7 +660,7 @@ export function TransitMap() {
           onClose={() => close({ stop: null })}
           onRoute={(routeId, dir) => navigate({ route: routeId, dir }, "push")}
           onFavoriteChange={changeFavorite}
-          onDirections={(to) => navigate({ trip: { to, from: null, at: null } }, "push")}
+          onDirections={ROUTE_FINDER ? (to) => navigate({ trip: { to, from: null, at: null } }, "push") : undefined}
         />
       ) : (
         view.near && (
@@ -668,7 +668,7 @@ export function TransitMap() {
             label={view.near.label}
             stops={nearby}
             onStop={(id) => navigate({ stop: id }, "push")}
-            onDirections={() => navigate({ trip: { to: view.near!, from: null, at: null } }, "push")}
+            onDirections={ROUTE_FINDER ? () => navigate({ trip: { to: view.near!, from: null, at: null } }, "push") : undefined}
             onClose={() => close({ near: null })}
           />
         )

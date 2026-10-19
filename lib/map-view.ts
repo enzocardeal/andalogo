@@ -53,13 +53,13 @@ function parseTrip(params: { get(name: string): string | null }): TripView | nul
   return { to, from: parseNear(params.get("from"), params.get("fromLabel")), at: params.get("at") && Number.isFinite(at) ? at : null };
 }
 
-export function parseMapView(params: { get(name: string): string | null }): MapView {
+export function parseMapView(params: { get(name: string): string | null }, trips = true): MapView {
   return {
     stop: params.get("stop"),
     route: params.get("route"),
     dir: params.get("dir") === "1" ? 1 : 0,
     near: parseNear(params.get("near"), params.get("label")),
-    trip: parseTrip(params),
+    trip: trips ? parseTrip(params) : null,
   };
 }
 

@@ -65,4 +65,5 @@ test("mapHref and parseMapView keep a trip with its origin and time", () => {
   assert.deepEqual([view.stop, view.trip], ["sp:1", trip]);
   const now = parseMapView(new URLSearchParams("to=-23.5,-46.6&toLabel=X")).trip;
   assert.deepEqual(now, { to: { lat: -23.5, lon: -46.6, label: "X" }, from: null, at: null });
+  assert.equal(parseMapView(new URLSearchParams("stop=sp:1&to=-23.5,-46.6&toLabel=X"), false).trip, null);
 });

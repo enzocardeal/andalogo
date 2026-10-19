@@ -11,7 +11,7 @@ type PlaceSheetProps = {
   label: string;
   stops: NearbyStop[] | null;
   onStop: (stopId: string) => void;
-  onDirections: () => void;
+  onDirections?: () => void;
   onClose: () => void;
 };
 
@@ -32,7 +32,7 @@ export function PlaceSheet({ label, stops, onStop, onDirections, onClose }: Plac
         <div className="flex min-w-0 flex-col">
           <span className="text-sm text-neutral-500 dark:text-neutral-400">{strings.place.near}</span>
           <h2 className="truncate text-lg font-semibold">{label}</h2>
-          <DirectionsButton onClick={onDirections} />
+          {onDirections && <DirectionsButton onClick={onDirections} />}
         </div>
         <CloseButton label={strings.place.close} onClick={onClose} />
       </header>
