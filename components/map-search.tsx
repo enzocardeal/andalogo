@@ -4,6 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import { LineBadge } from "@/components/line-badge";
 import type { Point } from "@/lib/geo";
 import { MIN_PLACE_QUERY, type Place } from "@/lib/places";
+import {
+  addRecent,
+  loadRecent,
+  matchRecent,
+  recentKey,
+  saveRecent,
+  type RecentRoute,
+  type RecentSearch,
+  type RecentStop,
+} from "@/lib/recent-searches";
 import { strings } from "@/lib/strings";
 import { createClient } from "@/lib/supabase/client";
 import type { SearchResult } from "@/lib/transit";
@@ -46,11 +56,18 @@ export function MapSearch({ onRoute, onStop, onPlace, bias }: MapSearchProps) {
   const [found, setFound] = useState<Found | null>(null);
   const [foundPlaces, setFoundPlaces] = useState<FoundPlaces | null>(null);
   const [searchingMore, setSearchingMore] = useState<string | null>(null);
+  const [recent, setRecent] = useState<RecentSearch[]>([]);
+  const [focused, setFocused] = useState(false);
   const biasRef = useRef(bias);
+  const inputRef = useRef<HTMLInputElement>(null);
   const term = query.trim();
   useEffect(() => {
     biasRef.current = bias;
   });
+
+  useEffect(() => {
+    setRecent(loadRecent());
+  }, []);
 
   useEffect(() => {
     if (term.length < MIN_QUERY_LENGTH) {
@@ -96,12 +113,30 @@ export function MapSearch({ onRoute, onStop, onPlace, bias }: MapSearchProps) {
   const currentPlaces = term.length >= MIN_PLACE_QUERY && foundPlaces?.query === term ? foundPlaces : null;
   const placesExpected = term.length >= MIN_PLACE_QUERY;
 
-  function choose(pick: () => void) {
+  function choose(entry: RecentSearch) {
+    const next = addRecent(recent, entry);
+    setRecent(next);
+    saveRecent(next);
     setQuery("");
     setFound(null);
     setFoundPlaces(null);
-    pick();
+    inputRef.current?.blur();
+    if (entry.kind === "route") {
+      onRoute(entry.route.id);
+    } else if (entry.kind === "stop") {
+      onStop(entry.stop.id);
+    } else {
+      onPlace(entry.place);
+    }
   }
+
+  function clearRecent() {
+    setRecent([]);
+    saveRecent([]);
+  }
+
+  const recentMatches = term ? matchRecent(recent, term) : [];
+  const showRecent = focused && !term && recent.length > 0;
 
   async function searchMore() {
     if (!placesExpected || searchingMore === term) {
@@ -117,10 +152,13 @@ export function MapSearch({ onRoute, onStop, onPlace, bias }: MapSearchProps) {
     <div className="absolute inset-x-3 top-[calc(env(safe-area-inset-top)+0.75rem)] z-10 flex flex-col gap-2">
       <div className="flex items-center rounded-full bg-white dark:bg-neutral-900 shadow-md">
         <input
+          ref={inputRef}
           id="map-search"
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           onKeyDown={(event) => {
             if (event.key === "Escape") {
               setQuery("");
@@ -146,18 +184,28 @@ export function MapSearch({ onRoute, onStop, onPlace, bias }: MapSearchProps) {
           </button>
         )}
       </div>
-      {(current || currentPlaces || searchingMore === term) && (
-        <div className="max-h-[50dvh] overflow-y-auto overscroll-contain rounded-lg bg-white dark:bg-neutral-900 p-2 shadow-md">
+      {showRecent && (
+        <div
+          onMouseDown={(event) => event.preventDefault()}
+          className="max-h-[50dvh] overflow-y-auto overscroll-contain rounded-lg bg-white dark:bg-neutral-900 p-2 shadow-md"
+        >
+          <RecentSection entries={recent} onPick={choose} onClear={clearRecent} />
+        </div>
+      )}
+      {(current || currentPlaces || searchingMore === term || recentMatches.length > 0) && (
+        <div
+          onMouseDown={(event) => event.preventDefault()}
+          className="max-h-[50dvh] overflow-y-auto overscroll-contain rounded-lg bg-white dark:bg-neutral-900 p-2 shadow-md"
+        >
           <SearchResults
+            recent={recentMatches}
             found={current}
             places={currentPlaces}
             placesExpected={placesExpected}
             canSearchMore={placesExpected && !currentPlaces?.full}
             searchingMore={searchingMore === term}
             onSearchMore={searchMore}
-            onRoute={(id) => choose(() => onRoute(id))}
-            onStop={(id) => choose(() => onStop(id))}
-            onPlace={(place) => choose(() => onPlace(place))}
+            onPick={choose}
           />
         </div>
       )}
@@ -165,37 +213,87 @@ export function MapSearch({ onRoute, onStop, onPlace, bias }: MapSearchProps) {
   );
 }
 
+function RecentRow({ entry, onPick }: { entry: RecentSearch; onPick: (entry: RecentSearch) => void }) {
+  if (entry.kind === "route") {
+    return (
+      <button type="button" onClick={() => onPick(entry)} className="flex min-h-11 w-full items-center gap-2 rounded px-2 text-left">
+        <LineBadge line={entry.route} />
+        <span className="truncate text-sm">{entry.route.long_name}</span>
+      </button>
+    );
+  }
+  if (entry.kind === "stop") {
+    return (
+      <button type="button" onClick={() => onPick(entry)} className="flex min-h-11 w-full items-center justify-between gap-2 rounded px-2 text-left">
+        <span className="truncate text-sm">{entry.stop.name}</span>
+        <span className="shrink-0 text-xs text-neutral-500 dark:text-neutral-400">{strings.modes[entry.stop.mode]}</span>
+      </button>
+    );
+  }
+  return (
+    <button type="button" onClick={() => onPick(entry)} className="flex min-h-11 w-full flex-col justify-center rounded px-2 text-left">
+      <span className="truncate text-sm">{entry.place.name}</span>
+      {entry.place.detail && <span className="truncate text-xs text-neutral-500 dark:text-neutral-400">{entry.place.detail}</span>}
+    </button>
+  );
+}
+
+function RecentSection({ entries, onPick, onClear }: { entries: RecentSearch[]; onPick: (entry: RecentSearch) => void; onClear?: () => void }) {
+  return (
+    <section>
+      <div className="flex items-center justify-between px-2">
+        <h3 className="text-xs font-semibold tracking-wide text-neutral-500 dark:text-neutral-400 uppercase">{strings.search.recent}</h3>
+        {onClear && (
+          <button type="button" onClick={onClear} className="min-h-9 text-xs font-medium text-blue-700 dark:text-blue-400">
+            {strings.search.clearRecent}
+          </button>
+        )}
+      </div>
+      <ul>
+        {entries.map((entry) => (
+          <li key={recentKey(entry)}>
+            <RecentRow entry={entry} onPick={onPick} />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 type SearchResultsProps = {
+  recent: RecentSearch[];
   found: Found | null;
   places: FoundPlaces | null;
   placesExpected: boolean;
   canSearchMore: boolean;
   searchingMore: boolean;
   onSearchMore: () => void;
-  onRoute: (routeId: string) => void;
-  onStop: (stopId: string) => void;
-  onPlace: (place: Place) => void;
+  onPick: (entry: RecentSearch) => void;
 };
 
 function SearchResults({
+  recent,
   found,
   places,
   placesExpected,
   canSearchMore,
   searchingMore,
   onSearchMore,
-  onRoute,
-  onStop,
-  onPlace,
+  onPick,
 }: SearchResultsProps) {
-  const routes = found?.result?.routes ?? [];
-  const stops = found?.result?.stops ?? [];
-  const placeList = places?.places ?? [];
+  const shown = new Set(recent.map(recentKey));
+  const asRoute = (route: RecentRoute): RecentSearch => ({ kind: "route", route });
+  const asStop = (stop: RecentStop): RecentSearch => ({ kind: "stop", stop });
+  const asPlace = (place: Place): RecentSearch => ({ kind: "place", place });
+  const routes = (found?.result?.routes ?? []).filter((route) => !shown.has(recentKey(asRoute(route))));
+  const stops = (found?.result?.stops ?? []).filter((stop) => !shown.has(recentKey(asStop(stop))));
+  const placeList = (places?.places ?? []).filter((place) => !shown.has(recentKey(asPlace(place))));
   const placesFailed = places !== null && places.places === null;
   const settled = Boolean(found?.result) && (!placesExpected || (places !== null && !placesFailed));
-  const empty = settled && routes.length === 0 && stops.length === 0 && placeList.length === 0;
+  const empty = settled && recent.length === 0 && routes.length === 0 && stops.length === 0 && placeList.length === 0;
   return (
     <div className="flex flex-col gap-2">
+      {recent.length > 0 && <RecentSection entries={recent} onPick={onPick} />}
       {empty && <p className="p-2 text-sm text-neutral-600 dark:text-neutral-400">{strings.search.empty}</p>}
       {found && !found.result && <p role="alert" className="p-2 text-sm text-red-700 dark:text-red-400">{strings.search.failed}</p>}
       {routes.length > 0 && (
@@ -206,7 +304,18 @@ function SearchResults({
               <li key={route.id}>
                 <button
                   type="button"
-                  onClick={() => onRoute(route.id)}
+                  onClick={() =>
+                    onPick(
+                      asRoute({
+                        id: route.id,
+                        short_name: route.short_name,
+                        long_name: route.long_name,
+                        mode: route.mode,
+                        color: route.color,
+                        text_color: route.text_color,
+                      }),
+                    )
+                  }
                   className="flex min-h-11 w-full items-center gap-2 rounded px-2 text-left"
                 >
                   <LineBadge line={route} />
@@ -225,7 +334,7 @@ function SearchResults({
               <li key={stop.id}>
                 <button
                   type="button"
-                  onClick={() => onStop(stop.id)}
+                  onClick={() => onPick(asStop({ id: stop.id, name: stop.name, mode: stop.mode }))}
                   className="flex min-h-11 w-full items-center justify-between gap-2 rounded px-2 text-left"
                 >
                   <span className="truncate text-sm">{stop.name}</span>
@@ -244,7 +353,7 @@ function SearchResults({
               <li key={place.id}>
                 <button
                   type="button"
-                  onClick={() => onPlace(place)}
+                  onClick={() => onPick(asPlace(place))}
                   className="flex min-h-11 w-full flex-col justify-center rounded px-2 text-left"
                 >
                   <span className="truncate text-sm">{place.name}</span>

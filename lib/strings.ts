@@ -65,6 +65,8 @@ export const strings = {
     empty: "Nada encontrado.",
     failed: "A busca falhou. Tente de novo.",
     placesFailed: "Não foi possível buscar lugares agora.",
+    recent: "Recentes",
+    clearRecent: "Limpar",
   },
   trip: {
     directions: "Como chegar",
