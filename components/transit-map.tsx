@@ -11,7 +11,7 @@ import { StopSheet } from "@/components/stop-sheet";
 import { TripSheet } from "@/components/trip-sheet";
 import { nextBuses } from "@/lib/arrivals";
 import { lineMotion, type MovingBus } from "@/lib/bus-motion";
-import { compassAllowed, smoothHeading, watchHeading } from "@/lib/compass";
+import { requestCompass, smoothHeading, watchHeading } from "@/lib/compass";
 import { busLabel, createBusLayer, type BusLayer, type ShownBus } from "@/lib/live-markers";
 import { INITIAL_ZOOM, MAP_STYLE_URL, MAP_WORKER_PATH, SAO_PAULO_CENTER } from "@/lib/map";
 import { createMapController, type MapController } from "@/lib/map-controller";
@@ -39,6 +39,7 @@ const STOP_ZOOM = 16;
 const SHEET_ENTRY = "andalogoSheet";
 const SEARCH_HEIGHT = 72;
 const NEXT_BUSES = 2;
+const TAP_EVENTS = ["pointerup", "touchend", "click"] as const;
 
 async function loadBaseStyle(): Promise<StyleSpecification> {
   const response = await fetch(MAP_STYLE_URL);
@@ -75,7 +76,7 @@ function addHeadingBeam(dot: Element): void {
   }
 }
 
-// iOS grants compass access only from a tap, so the locate button asks again when it is pressed.
+// iOS asks for compass access only during a touch, so the first touch anywhere asks.
 function trackHeading(map: MapLibreMap): () => void {
   const container = map.getContainer();
   let heading: number | null = null;
@@ -91,25 +92,46 @@ function trackHeading(map: MapLibreMap): () => void {
   const schedule = () => {
     frame ||= requestAnimationFrame(paint);
   };
-  const start = () =>
-    compassAllowed().then((allowed) => {
-      if (allowed && !stopWatch) {
+  let asking = false;
+  const ask = () => {
+    if (asking) {
+      return;
+    }
+    asking = true;
+    requestCompass().then((answer) => {
+      asking = false;
+      if (answer === "granted" && !stopWatch) {
         stopWatch = watchHeading((next) => {
           heading = smoothHeading(heading, next);
           schedule();
         });
       }
+      if (answer !== "needs-tap") {
+        TAP_EVENTS.forEach((type) => document.removeEventListener(type, ask, true));
+      }
     });
-  const button = container.querySelector(".maplibregl-ctrl-geolocate");
-  button?.addEventListener("click", start);
+  };
+  TAP_EVENTS.forEach((type) => document.addEventListener(type, ask, true));
   map.on("rotate", schedule);
-  start();
+  ask();
   return () => {
     stopWatch?.();
     cancelAnimationFrame(frame);
-    button?.removeEventListener("click", start);
+    TAP_EVENTS.forEach((type) => document.removeEventListener(type, ask, true));
     map.off("rotate", schedule);
   };
+}
+
+// MapLibre switches location off when its button is tapped while following, so that tap is dropped.
+function keepLocating(container: HTMLElement): () => void {
+  const onClick = (event: MouseEvent) => {
+    const button = (event.target as Element | null)?.closest(".maplibregl-ctrl-geolocate");
+    if (button?.classList.contains("maplibregl-ctrl-geolocate-active")) {
+      event.stopPropagation();
+    }
+  };
+  container.addEventListener("click", onClick, true);
+  return () => container.removeEventListener("click", onClick, true);
 }
 
 // A move without zoom ends the locate control's follow mode, so later GPS fixes stop recentering the map.
@@ -208,6 +230,7 @@ export function TransitMap() {
     const startsAtPlace = viewRef.current.stop !== null || viewRef.current.route !== null || Boolean(viewRef.current.near);
     let stopLocationDot = () => {};
     let stopHeading = () => {};
+    let stopKeepLocating = () => {};
 
     Promise.all([import("maplibre-gl"), loadBaseStyle()])
       .then(([maplibregl, base]) => {
@@ -237,6 +260,7 @@ export function TransitMap() {
         map.addControl(geolocate, "bottom-right");
         geolocate.on("geolocate", () => map.getContainer().querySelectorAll(".maplibregl-user-location-dot").forEach(addHeadingBeam));
         stopHeading = trackHeading(map);
+        stopKeepLocating = keepLocating(map.getContainer());
         map.addControl(new maplibregl.NavigationControl({ showZoom: false, visualizePitch: false }), "bottom-right");
         const markNorth = () => map.getContainer().classList.toggle("map-north", Math.abs(map.getBearing()) < 0.5);
         map.on("rotate", markNorth);
@@ -290,6 +314,7 @@ export function TransitMap() {
       cancelled = true;
       stopLocationDot();
       stopHeading();
+      stopKeepLocating();
       busLayerRef.current?.remove();
       busLayerRef.current = null;
       mapRef.current?.remove();

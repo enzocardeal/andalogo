@@ -29,14 +29,16 @@ export function watchHeading(onHeading: (heading: number) => void): () => void {
   return () => window.removeEventListener(type, listener);
 }
 
-export async function compassAllowed(): Promise<boolean> {
+export type CompassAnswer = "granted" | "denied" | "needs-tap";
+
+export async function requestCompass(): Promise<CompassAnswer> {
   const permission = (globalThis.DeviceOrientationEvent as { requestPermission?: () => Promise<string> } | undefined)?.requestPermission;
   if (!permission) {
-    return true;
+    return "granted";
   }
   try {
-    return (await permission()) === "granted";
+    return (await permission()) === "granted" ? "granted" : "denied";
   } catch {
-    return false;
+    return "needs-tap";
   }
 }
