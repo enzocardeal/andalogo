@@ -97,6 +97,29 @@ body {
   transform: rotate(-45deg);
 }
 
+.user-heading {
+  display: none;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 88px;
+  height: 88px;
+  margin: -44px 0 0 -44px;
+  background: radial-gradient(closest-side, rgb(29 161 242 / 0.7), rgb(29 161 242 / 0));
+  -webkit-mask-image: conic-gradient(from -35deg, #000 0deg 70deg, transparent 70deg);
+  mask-image: conic-gradient(from -35deg, #000 0deg 70deg, transparent 70deg);
+  transform: rotate(var(--user-heading, 0deg));
+  pointer-events: none;
+}
+
+.has-heading .user-heading {
+  display: block;
+}
+
+.has-heading .maplibregl-user-location-dot-stale .user-heading {
+  display: none;
+}
+
 .live-bus-arrow {
   display: grid;
   place-items: center;
