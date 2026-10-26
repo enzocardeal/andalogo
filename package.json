@@ -20,7 +20,8 @@
     "gtfs:load": "node --env-file-if-exists=.env.local scripts/gtfs-load.ts",
     "artesp:url": "node scripts/artesp-url.ts",
     "eta:collect": "node --env-file-if-exists=.env.local scripts/eta-collect.ts",
-    "eta:status": "node --env-file-if-exists=.env.local scripts/eta-status.ts"
+    "eta:status": "node --env-file-if-exists=.env.local scripts/eta-status.ts",
+    "eta:compare": "node --env-file-if-exists=.env.local scripts/eta-compare.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
