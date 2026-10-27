@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   advanceMeters,
   averagePace,
+  blendedTravelSeconds,
   circularDirections,
   estimateLine,
   estimateStop,
@@ -78,6 +79,27 @@ test("averagePace and travelSeconds use segment paces and fall back to the avera
   assert.equal(averagePace({ stop_offsets_m: [0, 0], run_time_s: 600 }), 0.24);
   assert.equal(travelSeconds([0, 1000, 2000], [0.1, 0.2], 0.3, 500, 1500), 150);
   assert.equal(travelSeconds([100, 1100, 2100], [0.1, 0.2], 0.3, 0, 600), 80);
+});
+
+test("blendedTravelSeconds moves from the hour's pace to the next hour's pace and scales by the live factor", () => {
+  const current = { paces: [0.1, 0.2], fallback: 0.3 };
+  const next = { paces: [0.2, 0.2], fallback: 0.3 };
+  assert.equal(blendedTravelSeconds([0, 1000, 2000], current, null, 500, 1500, 0).toFixed(6), (150).toFixed(6));
+  assert.equal(blendedTravelSeconds([0, 1000, 2000], current, null, 500, 1500, 0, 0.8).toFixed(6), (120).toFixed(6));
+  assert.equal(blendedTravelSeconds([0, 1000, 2000], current, null, 500, 1500, 0, 0.1).toFixed(6), (105).toFixed(6));
+  assert.equal(blendedTravelSeconds([0, 1000, 2000], current, next, 0, 1000, 0).toFixed(6), (100).toFixed(6));
+  assert.equal(blendedTravelSeconds([0, 1000, 2000], current, next, 0, 1000, 3600).toFixed(6), (200).toFixed(6));
+  assert.equal(blendedTravelSeconds([0, 1000, 2000], current, next, 0, 1000, 1800).toFixed(6), (150).toFixed(6));
+});
+
+test("estimateLine uses the next hour's paces only when the pattern has an hour start", () => {
+  const slow = { ...pattern(2), paces: [480, 480], samples: [50, 50] };
+  const fast = { ...slow, next_paces: [120, 120], next_samples: [50, 50] };
+  const [base] = estimateLine(slow, [vehicle("1", east(400))], NOW);
+  const [same] = estimateLine(fast, [vehicle("1", east(400))], NOW);
+  const [blended] = estimateLine({ ...fast, hour_start: new Date(NOW.getTime() - 3_600_000).toISOString() }, [vehicle("1", east(400))], NOW);
+  assert.equal(same.seconds, base.seconds);
+  assert.ok(blended.seconds < base.seconds / 2);
 });
 
 test("segmentPaces blends calibrated paces with the line mean and the GTFS average", () => {

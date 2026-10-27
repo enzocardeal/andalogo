@@ -12,7 +12,14 @@ export const BUCKETS: [number, number][] = [
   [11, 20],
 ];
 
-export const SOURCES = ["sptrans", "gps", "shown"] as const;
+export const ACTUAL_BUCKETS: [number, number][] = [
+  [0, 5],
+  [5, 10],
+  [10, 20],
+  [20, 40],
+];
+
+export const SOURCES = ["sptrans", "gps", "blend", "blend30", "live", "blendLive", "shown"] as const;
 export type Source = (typeof SOURCES)[number];
 
 export type Prediction = {
@@ -22,6 +29,7 @@ export type Prediction = {
   directionId: number;
   p: string;
   minutes: Partial<Record<Source, number>>;
+  liveFactor?: number | null;
   arrivedAt?: number;
 };
 
@@ -164,13 +172,27 @@ export function score(errors: number[]): Score | null {
   };
 }
 
-export function errorsOf(predictions: Prediction[], source: Source, [low, high]: [number, number], paired: boolean): number[] {
+function actualMinutes(prediction: Prediction): number {
+  return (prediction.arrivedAt! - prediction.capturedAt) / 60_000;
+}
+
+export function errorsOf(
+  predictions: Prediction[],
+  source: Source,
+  [low, high]: [number, number],
+  paired: boolean,
+  by: "shown" | "actual" = "shown",
+): number[] {
   return predictions
-    .filter((prediction) => prediction.arrivedAt !== undefined)
+    .filter((prediction) => prediction.arrivedAt !== undefined && prediction.minutes[source] !== undefined)
     .filter((prediction) => !paired || (prediction.minutes.sptrans !== undefined && prediction.minutes.gps !== undefined))
     .filter((prediction) => {
-      const minutes = prediction.minutes[source];
-      return minutes !== undefined && minutes >= low && minutes <= high;
+      if (by === "actual") {
+        const actual = actualMinutes(prediction);
+        return actual >= low && actual < high;
+      }
+      const minutes = prediction.minutes[source]!;
+      return minutes >= low && minutes <= high;
     })
-    .map((prediction) => (prediction.arrivedAt! - prediction.capturedAt) / 60_000 - prediction.minutes[source]!);
+    .map((prediction) => actualMinutes(prediction) - prediction.minutes[source]!);
 }

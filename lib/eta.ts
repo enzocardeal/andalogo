@@ -14,6 +14,9 @@ const MAX_ESTIMATE_S = 5400;
 const DEFAULT_PACE_S_PER_M = 0.24;
 const MIN_PACE_S_PER_M = 0.06;
 const MAX_PACE_S_PER_M = 0.72;
+const MIN_LIVE_FACTOR = 0.7;
+const MAX_LIVE_FACTOR = 1.3;
+const HOUR_S = 3600;
 
 export type Route = { xy: [number, number][]; cumulative: number[]; scale: number };
 
@@ -30,7 +33,14 @@ export type StopPattern = {
   paces?: number[] | null;
   samples?: number[] | null;
   factor?: number | null;
+  next_paces?: number[] | null;
+  next_samples?: number[] | null;
+  next_factor?: number | null;
+  hour_start?: string | null;
+  live_factor?: number | null;
 };
+
+export type SegmentPaces = { paces: number[]; fallback: number };
 
 export type PositionIndex = Map<string, PositionLine["vs"]>;
 
@@ -131,6 +141,40 @@ export function travelSeconds(offsets: number[], paces: number[], fallback: numb
   return seconds;
 }
 
+export function nextSegmentPaces(pattern: Parameters<typeof segmentPaces>[0]): SegmentPaces | null {
+  if (!pattern.hour_start) {
+    return null;
+  }
+  return segmentPaces({ ...pattern, paces: pattern.next_paces, samples: pattern.next_samples, factor: pattern.next_factor });
+}
+
+// The hour's pace holds at the hour start and moves linearly to the next hour's pace over the hour.
+export function blendedTravelSeconds(
+  offsets: number[],
+  current: SegmentPaces,
+  next: SegmentPaces | null,
+  fromM: number,
+  toM: number,
+  startS: number,
+  live = 1,
+): number {
+  const pieces: [number, number, number, number][] = [
+    [-Infinity, offsets[0], current.fallback, next?.fallback ?? 0],
+    ...offsets.slice(1).map((offset, k): [number, number, number, number] => [offsets[k], offset, current.paces[k], next?.paces[k] ?? 0]),
+  ];
+  const factor = Math.max(MIN_LIVE_FACTOR, Math.min(MAX_LIVE_FACTOR, live));
+  let seconds = 0;
+  for (const [start, end, pace, nextPace] of pieces) {
+    const meters = Math.min(toM, end) - Math.max(fromM, start);
+    if (meters <= 0) {
+      continue;
+    }
+    const weight = next ? Math.max(0, Math.min(1, (startS + seconds) / HOUR_S)) : 0;
+    seconds += meters * clampPace(((1 - weight) * pace + weight * nextPace) * factor);
+  }
+  return seconds;
+}
+
 export function advanceMeters(offsets: number[], paces: number[], fallback: number, fromM: number, seconds: number): number {
   const segments: [number, number, number][] = [
     [-Infinity, offsets[0], fallback],
@@ -203,7 +247,9 @@ export function passOnSide(passes: Projection[], side: number | null): Projectio
 export function estimateLine(pattern: StopPattern, vehicles: PositionLine["vs"], now: Date, side: number | null = null): Estimate[] {
   const route = measure(decodePolyline(pattern.polyline));
   const offsets = pattern.stop_offsets_m;
-  const { paces, fallback: pace } = segmentPaces(pattern);
+  const current = segmentPaces(pattern);
+  const next = nextSegmentPaces(pattern);
+  const hourStart = pattern.hour_start ? Date.parse(pattern.hour_start) : 0;
   const estimates: Estimate[] = [];
   for (const vehicle of vehicles) {
     const ageS = (now.getTime() - Date.parse(vehicle.ta)) / 1000;
@@ -219,7 +265,8 @@ export function estimateLine(pattern: StopPattern, vehicles: PositionLine["vs"],
         continue;
       }
       const fromM = Math.max(...before.map((pass) => pass.alongM));
-      const seconds = travelSeconds(offsets, paces, pace, fromM, stopM) - Math.max(0, ageS);
+      const startS = (Date.parse(vehicle.ta) - hourStart) / 1000;
+      const seconds = blendedTravelSeconds(offsets, current, next, fromM, stopM, startS, pattern.live_factor ?? 1) - Math.max(0, ageS);
       if (seconds >= -PASSED_S && seconds <= MAX_ESTIMATE_S && (best === null || seconds < best)) {
         best = seconds;
       }
