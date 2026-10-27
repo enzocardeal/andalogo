@@ -98,15 +98,8 @@ export function combineArrivals(
       merged.set(key, { ...line, vehicles: [...line.vehicles] });
       continue;
     }
-    for (const vehicle of line.vehicles) {
-      const index = current.vehicles.findIndex((known) => known.p === vehicle.p);
-      if (index >= 0) {
-        const known = current.vehicles[index];
-        current.vehicles[index] = { ...known, minutes: Math.round((known.minutes + vehicle.minutes) / 2) };
-      } else {
-        current.vehicles.push(vehicle);
-      }
-    }
+    const known = new Set(current.vehicles.map((vehicle) => vehicle.p));
+    current.vehicles.push(...line.vehicles.filter((vehicle) => !known.has(vehicle.p)));
   }
   return {
     state: "live",

@@ -85,17 +85,17 @@ test("combineArrivals keeps a stop with lines but no located vehicle live", () =
   });
 });
 
-test("combineArrivals averages SPTrans and GPS times for the same bus and adds buses that SPTrans does not list", () => {
+test("combineArrivals adds GPS estimates for buses that SPTrans does not list", () => {
   const gps = (p: string, minutes: number) => ({ p, minutes, accessible: true, ...AT });
   const estimated = [
-    { routeId: "sp:8000-10", directionId: 1, vehicles: [gps("11111", 6), gps("22222", 4)] },
+    { routeId: "sp:8000-10", directionId: 1, vehicles: [gps("11111", 7), gps("22222", 4)] },
     { routeId: "sp:917H-10", directionId: 0, vehicles: [gps("33333", 10)] },
     { routeId: "sp:1012-10", directionId: 0, vehicles: [] },
   ];
   assert.deepEqual(combineArrivals(prediction("10:00", [{ c: "8000-10", sl: 2, vs: [vehicle("10:09")] }]), estimated, NOW), {
     state: "live",
     lines: [
-      { routeId: "sp:8000-10", directionId: 1, vehicles: [{ p: "22222", minutes: 4, accessible: true, ...AT }, { p: "11111", minutes: 8, accessible: true, ...AT }] },
+      { routeId: "sp:8000-10", directionId: 1, vehicles: [{ p: "22222", minutes: 4, accessible: true, ...AT }, { p: "11111", minutes: 9, accessible: true, ...AT }] },
       { routeId: "sp:917H-10", directionId: 0, vehicles: [{ p: "33333", minutes: 10, accessible: true, ...AT }] },
     ],
   });
