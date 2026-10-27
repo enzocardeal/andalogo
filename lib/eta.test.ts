@@ -81,12 +81,10 @@ test("averagePace and travelSeconds use segment paces and fall back to the avera
   assert.equal(travelSeconds([100, 1100, 2100], [0.1, 0.2], 0.3, 0, 600), 80);
 });
 
-test("blendedTravelSeconds moves from the hour's pace to the next hour's pace and scales by the live factor", () => {
+test("blendedTravelSeconds moves from the hour's pace to the next hour's pace", () => {
   const current = { paces: [0.1, 0.2], fallback: 0.3 };
   const next = { paces: [0.2, 0.2], fallback: 0.3 };
   assert.equal(blendedTravelSeconds([0, 1000, 2000], current, null, 500, 1500, 0).toFixed(6), (150).toFixed(6));
-  assert.equal(blendedTravelSeconds([0, 1000, 2000], current, null, 500, 1500, 0, 0.8).toFixed(6), (120).toFixed(6));
-  assert.equal(blendedTravelSeconds([0, 1000, 2000], current, null, 500, 1500, 0, 0.1).toFixed(6), (105).toFixed(6));
   assert.equal(blendedTravelSeconds([0, 1000, 2000], current, next, 0, 1000, 0).toFixed(6), (100).toFixed(6));
   assert.equal(blendedTravelSeconds([0, 1000, 2000], current, next, 0, 1000, 3600).toFixed(6), (200).toFixed(6));
   assert.equal(blendedTravelSeconds([0, 1000, 2000], current, next, 0, 1000, 1800).toFixed(6), (150).toFixed(6));

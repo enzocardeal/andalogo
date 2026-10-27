@@ -19,7 +19,7 @@ export const ACTUAL_BUCKETS: [number, number][] = [
   [20, 40],
 ];
 
-export const SOURCES = ["sptrans", "gps", "blend", "blend30", "live", "blendLive", "shown"] as const;
+export const SOURCES = ["sptrans", "gps", "hourly", "shown"] as const;
 export type Source = (typeof SOURCES)[number];
 
 export type Prediction = {
@@ -29,7 +29,6 @@ export type Prediction = {
   directionId: number;
   p: string;
   minutes: Partial<Record<Source, number>>;
-  liveFactor?: number | null;
   arrivedAt?: number;
 };
 

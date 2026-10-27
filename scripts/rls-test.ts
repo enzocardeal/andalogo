@@ -385,10 +385,14 @@ test("search finds lines by sign and stops by name, without accents", async () =
 });
 
 test("get_stop_eta returns the SPTrans bus patterns that pass the stop", async () => {
-  const patterns = ok(await member.client.rpc("get_stop_eta", { p_stop_id: stopId }), "get_stop_eta");
-  assert.deepEqual(patterns, [
-    { route_id: busId, direction_id: 0, polyline: "_p~iF~ps|U", stop_offsets_m: [0, 500], stop_indexes: [1], run_time_s: 120, circular: true, paces: null, samples: null, factor: null },
+  const [{ hour_start, ...pattern }, ...rest] = ok(
+    await member.client.rpc("get_stop_eta", { p_stop_id: stopId, p_at: "2026-10-19T12:30:00-03:00" }),
+    "get_stop_eta",
+  ) as Record<string, unknown>[];
+  assert.deepEqual([pattern, ...rest], [
+    { route_id: busId, direction_id: 0, polyline: "_p~iF~ps|U", stop_offsets_m: [0, 500], stop_indexes: [1], run_time_s: 120, circular: true, paces: null, samples: null, factor: null, next_paces: null, next_samples: null, next_factor: null },
   ]);
+  assert.equal(Date.parse(hour_start as string), Date.parse("2026-10-19T12:00:00-03:00"));
   assert.deepEqual(ok(await member.client.rpc("get_stop_eta", { p_stop_id: squareId }), "get_stop_eta without stop_routes"), []);
 });
 
@@ -402,15 +406,18 @@ test("savePaces merges calibration rows and get_stop_eta returns the paces of th
     const [line] = ok(await member.client.rpc("get_stop_eta", { p_stop_id: stopId, p_at: time }), `get_stop_eta at ${time}`) as {
       paces: number[] | null;
       samples: number[] | null;
+      next_paces: number[] | null;
+      next_samples: number[] | null;
     }[];
-    return [line.paces, line.samples];
+    return [line.paces, line.samples, line.next_paces, line.next_samples];
   };
-  assert.deepEqual(await pacesAt("2026-10-19T12:30:00-03:00"), [[300], [2]]);
+  assert.deepEqual(await pacesAt("2026-10-19T11:30:00-03:00"), [null, null, [300], [2]]);
+  assert.deepEqual(await pacesAt("2026-10-19T12:30:00-03:00"), [[300], [2], null, null]);
   const [factor] = await sql`select factor, segments from public.eta_factors where day_type = 'weekday' and hour = 12`;
   assert.deepEqual([factor.factor, factor.segments], [1.25, 1]);
-  assert.deepEqual(await pacesAt("2026-10-19T13:30:00-03:00"), [null, null]);
+  assert.deepEqual(await pacesAt("2026-10-19T13:30:00-03:00"), [null, null, null, null]);
   await sql`update public.eta_paces set stops_key = 'old' where route_id = ${busId}`;
-  assert.deepEqual(await pacesAt("2026-10-19T12:30:00-03:00"), [null, null]);
+  assert.deepEqual(await pacesAt("2026-10-19T11:30:00-03:00"), [null, null, null, null]);
 });
 
 test("get_line_eta returns the pattern of one SPTrans bus line direction", async () => {
